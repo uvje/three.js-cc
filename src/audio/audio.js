@@ -153,7 +153,10 @@ export class AudioEngine {
     const fan = this.filt('lowpass', 380, 0.7); const fg = this.gain(0.9); this.loop(this.pink, fan); fan.connect(fg).connect(B.hum);
     h1.start(); h2.start(); h3.start();
     B.hum.connect(B.humP).connect(this.ambOut);
-    // rain? (not yet)
+    B.rainHP = this.filt('highpass', 450, 0.5); B.rainLP = this.filt('lowpass', 7500, 0.5); B.rain = this.gain(0);
+    this.loop(this.white, B.rainHP, 0.8); B.rainHP.connect(B.rainLP).connect(B.rain).connect(this.ambOut);
+    B.rainLow = this.gain(0); B.rainLowLP = this.filt('lowpass', 600, 0.6);
+    this.loop(this.pink, B.rainLowLP, 0.9); B.rainLowLP.connect(B.rainLow).connect(this.ambOut);
   }
   buildBike() {
     const K = (this.bikeN = {});
@@ -220,10 +223,13 @@ export class AudioEngine {
     set(B.wind.gain, (0.05 + 0.17 * gust) * (env.indoor ? 0.3 : 1), 0.8);
     set(B.windLP.frequency, 260 + 520 * gust, 0.8);
     set(B.leaf.gain, gust * gust * 0.12 * (0.2 + env.trees), 0.5);
-    const abura = band(h, 7.2, 17.4, 1.1), minmin = band(h, 8.3, 15.8, 1.0);
+    const rain = env.rain || 0;
+    set(B.rain.gain, rain * 0.5, 1.2); set(B.rainLow.gain, rain * 0.35, 1.2);
+    const dry = 1 - rain;
+    const abura = band(h, 7.2, 17.4, 1.1) * dry, minmin = band(h, 8.3, 15.8, 1.0) * dry;
     const higu = Math.max(band(h, 4.5, 6.4, 0.35), band(h, 17.5, 19.4, 0.35));
     const cricket = Math.max(ss(18.4, 19.6, h), 1 - ss(3.8, 5.0, h));
-    const frog = Math.max(ss(18.0, 19.3, h), 1 - ss(2.5, 4.2, h));
+    const frog = Math.min(1, Math.max(ss(18.0, 19.3, h), 1 - ss(2.5, 4.2, h)) + rain * 0.7 + (env.wet || 0) * 0.3);
     set(B.abura1.out.gain, abura * (0.28 + 0.85 * env.trees), 1.5);
     set(B.abura2.out.gain, abura * (0.14 + 0.45 * env.trees), 1.5);
     set(B.far.out.gain, Math.max(abura * 0.6, higu * 0.4) * 0.5, 2);
@@ -587,6 +593,21 @@ export class AudioEngine {
     f1.frequency.setValueAtTime(700, t); f1.frequency.linearRampToValueAtTime(1300, t + d * 0.4); f1.frequency.linearRampToValueAtTime(800, t + d);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.05); g.gain.setValueAtTime(0.14, t + d * 0.7); g.gain.linearRampToValueAtTime(0, t + d);
     o.start(t); o.stop(t + d + 0.05);
+  }
+
+  thunder(dist) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + dist / 343;
+    const close = dist < 1200;
+    const s = c.createBufferSource(); s.buffer = this.brown;
+    const lp = this.filt('lowpass', close ? 380 : 180, 0.7), g = this.gain(0);
+    s.connect(lp).connect(g).connect(this.ambOut); const rs = this.gain(0.8); g.connect(rs).connect(this.revIn);
+    const A = Math.min(1.4, 1300 / dist);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(A, t + (close ? 0.08 : 0.5));
+    for (let k = 1; k < 6; k++) g.gain.linearRampToValueAtTime(A * (0.4 + Math.random() * 0.6) * (1 - k / 7), t + k * 0.7);
+    g.gain.linearRampToValueAtTime(0, t + 6);
+    s.start(t, Math.random() * 3); s.stop(t + 6.2);
+    if (close) this.burst(t, 1800, 0.4, 0.4, 0.5 * A, this.ambOut, 'highpass');
   }
 
   // ---------------------------------------------------------------- road traffic

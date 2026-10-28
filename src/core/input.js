@@ -26,12 +26,14 @@ export class Input {
     document.addEventListener('pointerlockchange', () => {
       const was = this.locked;
       this.locked = document.pointerLockElement === canvas;
+      // browsers can report a large bogus jump right after the lock changes
+      this.quietUntil = performance.now() + 120;
+      this.mouseDX = this.mouseDY = 0;
       if (was && !this.locked && this.onUnlock) this.onUnlock();
     });
     document.addEventListener('pointerlockerror', () => { this.lockFailed = true; });
 
-    canvas.addEventListener('mousemove', (e) => this._move(e));
-    document.addEventListener('mousemove', (e) => { if (this.locked) this._move(e); });
+    document.addEventListener('mousemove', (e) => this._move(e));
     canvas.addEventListener('mousedown', (e) => {
       if (!this.enabled) return;
       if (e.button === 0) this.clicked = true;
@@ -53,8 +55,10 @@ export class Input {
   _move(e) {
     if (!this.enabled) return;
     if (this.locked || this.dragging) {
-      this.mouseDX += e.movementX || 0;
-      this.mouseDY += e.movementY || 0;
+      const mx = e.movementX || 0, my = e.movementY || 0;
+      if (performance.now() < (this.quietUntil || 0) || Math.abs(mx) > 300 || Math.abs(my) > 300) return;
+      this.mouseDX += mx;
+      this.mouseDY += my;
       this.lastMouseMove = performance.now();
     }
   }

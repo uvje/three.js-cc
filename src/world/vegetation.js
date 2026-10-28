@@ -91,7 +91,7 @@ export class Forest {
   constructor(W, quality) {
     this.W = W;
     this.types = buildTypes();
-    this.chunk = 125;
+    this.chunk = 200;
     this.meshes = [];
     const foliage = W.M.foliage;
     const bambooMat = patch(new THREE.MeshLambertMaterial({ vertexColors: true }), { wind: 0.0042, windBase: 1.0, key: 'bamboo' });
@@ -120,12 +120,13 @@ export class Forest {
       mesh.computeBoundingSphere();
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.userData = { geos, cx: cx / arr.length, cz: cz / arr.length, lod: 0 };
+      const [, ix, iz] = k.split('|').map(Number);
+      mesh.userData = { geos, x0: ix * this.chunk, z0: iz * this.chunk, lod: 0 };
       mesh.name = 'trees:' + k;
       this.meshes.push(mesh);
       W.scene.add(mesh);
     }
-    this.lodDist = quality === 'high' ? [200, 520] : quality === 'low' ? [110, 340] : [160, 440];
+    this.lodDist = quality === 'high' ? [130, 420] : quality === 'low' ? [60, 260] : [95, 340];
     // index for audio (cicadas in trees)
     this.index = new Map();
     for (const t of W.plan.trees) {
@@ -135,11 +136,12 @@ export class Forest {
       a.push(t);
     }
   }
-  setQuality(q) { this.lodDist = q === 'high' ? [200, 520] : q === 'low' ? [110, 340] : [160, 440]; }
+  setQuality(q) { this.lodDist = q === 'high' ? [130, 420] : q === 'low' ? [60, 260] : [95, 340]; }
   update(cam) {
     for (const m of this.meshes) {
       const u = m.userData;
-      const d = Math.hypot(cam.x - u.cx, cam.z - u.cz) - this.chunk * 0.55;
+      const dx = Math.max(u.x0 - cam.x, 0, cam.x - u.x0 - this.chunk), dz = Math.max(u.z0 - cam.z, 0, cam.z - u.z0 - this.chunk);
+      const d = Math.hypot(dx, dz);
       const lod = d < this.lodDist[0] ? 0 : d < this.lodDist[1] ? 1 : 2;
       if (lod !== u.lod) { u.lod = lod; m.geometry = u.geos[lod]; m.castShadow = lod < 2; }
     }

@@ -17,6 +17,7 @@ import { Trains } from './world/train.js';
 import { Fireworks, Sparkler } from './world/fireworks.js';
 import { Villagers } from './world/npc.js';
 import { Traffic } from './world/traffic.js';
+import { Weather } from './env/weather.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -118,6 +119,8 @@ class Game {
     this.sparkler = new Sparkler(this.camera, this.scene, this.audio);
     this.villagers = new Villagers(this.world, this.audio);
     this.traffic = new Traffic(this.world, this.audio);
+    this.weather = new Weather(this.scene, this.audio);
+    this.env.weather = this.weather;
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -354,6 +357,7 @@ class Game {
     if (W.fireflies.u.uOn.value > 0.3 && rd < 30) this.stamp('fireflies');
     if (P.nightRide > 500) this.stamp('night');
     if (P.ridden > 5000) this.stamp('ride');
+    if (this.weather.rain > 0.6) this.stamp('rain');
     if (h > 4.4 && h < 6.6 && U.uMist.value.x > 0.015) this.stamp('mist');
     store.set('ridden', Math.round(P.ridden));
   }
@@ -378,6 +382,8 @@ class Game {
       this.hud.toast('Над рекой начинается летний фейерверк — ханаби!');
       this.stamp('hanabi');
     }
+    if (this.weather.state && !this.rainToast) { this.rainToast = true; this.hud.toast('Небо темнеет, пахнет пылью и озоном. Кажется, будет ливень.'); }
+    if (!this.weather.state) this.rainToast = false;
     if (crossed(7)) { this.addMoney(500); this.hud.toast('Утро. Бабушка оставила на столе 500 иен на карманные расходы.'); }
   }
 
@@ -415,6 +421,7 @@ class Game {
       this.sparkler.update(this.modal ? 0 : dt, pr, hh);
       this.villagers.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       this.traffic.update(this.modal ? 0 : dt, time, this.player);
+      this.weather.update(this.modal ? 0 : dt, time, this.camera.position);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);
@@ -439,7 +446,7 @@ class Game {
     this.camera.getWorldDirection(fwd);
     const tmp = [];
     this.audio.update(dt, {
-      hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night,
+      hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
       cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: false,
       river: W.nearestRiver(cam.x, cam.z), hum: W.nearestHum(cam.x, cam.z),
       bike: { riding: P.mode === 'bike', speed: P.bike.speed, pedaling: P.bike.pedaling, braking: P.bike.braking, surface: P.surface },

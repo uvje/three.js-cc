@@ -15,6 +15,7 @@ export const U = {
   uMoonDir: { value: new THREE.Vector3(0, -1, 0) },
   uMoonI: { value: 0 },
   uLamps: { value: 0 },
+  uWet: { value: 0 },
 };
 
 const FOG_PARS = /* glsl */`
@@ -72,7 +73,7 @@ export function patch(mat, o = {}) {
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     sh.uniforms.uTime = U.uTime; sh.uniforms.uSunDir = U.uSunDir; sh.uniforms.uFogSun = U.uFogSun;
-    sh.uniforms.uMist = U.uMist; sh.uniforms.uWind = U.uWind; sh.uniforms.uGust = U.uGust;
+    sh.uniforms.uMist = U.uMist; sh.uniforms.uWind = U.uWind; sh.uniforms.uGust = U.uGust; sh.uniforms.uWet = U.uWet;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uTime;\nuniform vec3 uWind;\nuniform float uGust;\n')
       .replace('#include <project_vertex>', '#include <project_vertex>\n' + WPOS_VERT);
@@ -81,8 +82,8 @@ export function patch(mat, o = {}) {
         WIND_VERT.replace('WIND_AMT', o.wind.toFixed(5)).replace('WIND_BASE', (o.windBase || 0).toFixed(3)));
     }
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\n' + FOG_PARS)
-      .replace('#include <fog_fragment>', FOG_APPLY);
+      .replace('#include <common>', '#include <common>\n' + FOG_PARS + 'uniform float uWet;\n')
+      .replace('#include <fog_fragment>', 'gl_FragColor.rgb *= 1.0 - uWet * 0.26;\n' + FOG_APPLY);
     if (o.frag) o.frag(sh);
     if (prev) prev(sh, r);
   };

@@ -129,6 +129,7 @@ function cumulusTexture(seed) {
 export class Sky {
   constructor() {
     this.group = new THREE.Group();
+    this._g = new THREE.Color();
     this.uniforms = {
       uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uMoonDir: { value: new THREE.Vector3(0, -1, 0) },
       uZenith: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uGround: { value: new THREE.Color() },
@@ -165,7 +166,7 @@ export class Sky {
       this.clouds.push({ mesh, u, az });
     });
   }
-  update(camera, time, tSec) {
+  update(camera, time, tSec, cloud = 0, flash = 0) {
     this.group.position.copy(camera.position);
     const s = time.s, u = this.uniforms;
     u.uSunDir.value.copy(time.sunDir);
@@ -180,7 +181,19 @@ export class Sky {
     u.uCloudDark.value.copy(s.cd);
     u.uStars.value = s.stars;
     u.uTime.value = tSec;
-    u.uMoonLight.value = smooth01((time.moonDir.y + 0.02) / 0.06) * (0.35 + 0.65 * (1 - day));
+    u.uMoonLight.value = smooth01((time.moonDir.y + 0.02) / 0.06) * (0.35 + 0.65 * (1 - day)) * (1 - cloud);
+    u.uCloudCover.value = 0.42 + 0.56 * cloud;
+    if (cloud > 0.001) {
+      for (const c of [u.uZenith.value, u.uHorizon.value, u.uCloudLit.value, u.uCloudDark.value]) {
+        const l = c.r * 0.3 + c.g * 0.55 + c.b * 0.15;
+        c.lerp(this._g.setRGB(l * 0.62, l * 0.66, l * 0.72), cloud * 0.85);
+      }
+      u.uCloudDark.value.multiplyScalar(1 - 0.5 * cloud);
+      u.uSunDisc.value.multiplyScalar(1 - cloud);
+      u.uSunGlow.value.multiplyScalar(1 - 0.85 * cloud);
+      u.uStars.value *= 1 - cloud;
+    }
+    u.uBright.value = 1.25 + flash * 1.2;
     for (const c of this.clouds) {
       c.u.uLit.value.copy(s.cl).multiplyScalar(1.05);
       c.u.uDark.value.copy(s.cd).lerp(s.hor, 0.25);
@@ -189,7 +202,7 @@ export class Sky {
       const az = c.az, sx = Math.sin(az), sz = -Math.cos(az);
       const facing = Math.max(0, sx * time.sunDir.x + sz * time.sunDir.z);
       c.u.uSunGlow.value.copy(s.haze).multiplyScalar(facing * (1 - day * 0.7));
-      c.u.uOpacity.value = 0.55 + 0.45 * Math.max(day, 0.25);
+      c.u.uOpacity.value = (0.55 + 0.45 * Math.max(day, 0.25)) * (1 - cloud * 0.9);
     }
   }
 }

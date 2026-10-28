@@ -36,6 +36,8 @@ export class Environment {
     this.gust = 0.3;
     this.mistBase = 4;
     this._lp = new THREE.Vector3();
+    this._grey = new THREE.Color();
+    this.weather = null;
     this._right = new THREE.Vector3();
     this._up = new THREE.Vector3();
   }
@@ -64,11 +66,17 @@ export class Environment {
     L.position.copy(this._lp).addScaledVector(dir, 350);
     L.target.updateMatrixWorld();
 
+    const Wt = this.weather, cl = Wt ? Wt.cloud : 0, fl = Wt ? Wt.flash : 0;
+    L.intensity *= 1 - 0.82 * cl;
     this.hemi.color.copy(s.hs);
     this.hemi.groundColor.copy(s.hg);
-    this.hemi.intensity = s.hi;
+    this.hemi.intensity = s.hi * (1 - 0.25 * cl) + fl * 2.5;
     this.scene.fog.color.copy(s.fog);
-    this.scene.fog.density = s.fd;
+    this.scene.fog.density = s.fd * (1 + 2.4 * cl);
+    if (cl > 0.001) {
+      const grey = (c, k) => { const l = c.r * 0.3 + c.g * 0.55 + c.b * 0.15; c.lerp(this._grey.setRGB(l * 0.95, l * 0.98, l * 1.04), k); };
+      grey(this.hemi.color, cl * 0.8); grey(this.scene.fog.color, cl * 0.85); this.scene.fog.color.multiplyScalar(1 - 0.35 * cl);
+    }
     this.renderer.toneMappingExposure = s.exp;
 
     // wind & gusts
@@ -84,13 +92,13 @@ export class Environment {
     U.uFogSun.value.copy(s.haze);
     // morning mist pooled in the valley, breathing slowly
     const breathe = 0.75 + 0.25 * n.noise(tSec * 0.01, 2.2);
-    U.uMist.value.set(s.mist * breathe, 0.11, this.mistBase);
+    U.uMist.value.set(s.mist * breathe + cl * 0.006, 0.11, this.mistBase);
     U.uNight.value = time.night;
     U.uSkyZen.value.copy(s.zen).multiplyScalar(1.2);
     U.uSkyHor.value.copy(s.hor).multiplyScalar(1.2);
     U.uMoonDir.value.copy(time.moonDir);
     U.uMoonI.value = time.moonI / 0.38;
 
-    this.sky.update(camera, time, tSec);
+    this.sky.update(camera, time, tSec, cl, fl);
   }
 }
