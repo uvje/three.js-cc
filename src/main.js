@@ -16,6 +16,7 @@ import { HUD, STAMPS } from './ui/hud.js';
 import { Trains } from './world/train.js';
 import { Fireworks, Sparkler } from './world/fireworks.js';
 import { Villagers } from './world/npc.js';
+import { Traffic } from './world/traffic.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -116,6 +117,7 @@ class Game {
     this.fireworks = new Fireworks(this.scene, this.audio, { x: fq.x, y: rv.poly.sampleArray(rv.water, fq.s), z: fq.z });
     this.sparkler = new Sparkler(this.camera, this.scene, this.audio);
     this.villagers = new Villagers(this.world, this.audio);
+    this.traffic = new Traffic(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -304,6 +306,12 @@ class Game {
     this.hud.toast(`Шипит, разгорается… (осталось ${this.sparklers})`);
     this.stamp('senko');
   }
+  onBusStop(s) {
+    const P = this.player;
+    if (P.mode === 'sit' && P.sit.busStop && Math.abs(this.traffic.road.poly.nearest(P.sit.x, P.sit.z, 20).s - s) < 15) {
+      this.hud.toast('Автобус «なつめ村内線» открывает двери. Водитель вопросительно смотрит… Ты машешь: «Я просто посидеть».');
+    }
+  }
   onTrainArrive(run) {
     const P = this.player, S = this.world.plan.areas.station;
     const d = Math.hypot(P.pos.x - S.plat[0], P.pos.z - S.plat[1]);
@@ -406,6 +414,7 @@ class Game {
       this.fireworks.update(this.modal ? 0 : dt, this.camera.position, pr, hh);
       this.sparkler.update(this.modal ? 0 : dt, pr, hh);
       this.villagers.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
+      this.traffic.update(this.modal ? 0 : dt, time, this.player);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

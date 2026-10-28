@@ -589,6 +589,50 @@ export class AudioEngine {
     o.start(t); o.stop(t + d + 0.05);
   }
 
+  // ---------------------------------------------------------------- road traffic
+  vehicle(v, pos) {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime;
+    if (!v.voice) {
+      if (!pos) return;
+      const p = this.panner(0, -500, 0, 6, 1.2);
+      const o = this.osc('sawtooth', 60), lp = this.filt('lowpass', 650, 1.2), am = this.gain(0.6), lfo = this.osc('sine', 27), lg = this.gain(0.4);
+      lfo.connect(lg).connect(am.gain);
+      const g = this.gain(0), tg = this.gain(0), tl = this.filt('lowpass', 420, 0.6);
+      o.connect(lp).connect(am).connect(g).connect(p); this.loop(this.brown, tl); tl.connect(tg).connect(p);
+      p.connect(this.ambOut);
+      o.start(); lfo.start();
+      v.voice = { p, o, g, tg, lfo };
+    }
+    const V = v.voice;
+    if (!pos) { V.g.gain.setTargetAtTime(0, t, 0.3); V.tg.gain.setTargetAtTime(0, t, 0.3); return; }
+    this.setPos(V.p, pos.x, pos.y, pos.z);
+    const bus = v.kind === 'bus';
+    V.o.frequency.setTargetAtTime((bus ? 36 : 52) + v.v * (bus ? 4 : 7.5), t, 0.3);
+    V.lfo.frequency.setTargetAtTime((bus ? 18 : 26) + v.v * 2, t, 0.3);
+    V.g.gain.setTargetAtTime((0.06 + v.v * 0.01) * (bus ? 1.5 : 1), t, 0.25);
+    V.tg.gain.setTargetAtTime(v.v * 0.03, t, 0.25);
+  }
+  horn(pos, kind) {
+    if (!this.ready) return;
+    const out = this.spot(pos.x, pos.y, pos.z, { ref: 12, roll: 0.9, rev: 0.3 });
+    const t = this.ctx.currentTime + 0.02, f = kind === 'bus' ? 330 : kind === 'kei' ? 400 : 440;
+    for (const d of [0, 0.22]) for (const r of [1, 1.26]) {
+      const o = this.osc('square', f * r), lp = this.filt('lowpass', 1800, 0.7), g = this.gain(0);
+      o.connect(lp).connect(g).connect(out);
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(0.12, t + d + 0.01); g.gain.setValueAtTime(0.12, t + d + 0.13); g.gain.linearRampToValueAtTime(0, t + d + 0.16);
+      o.start(t + d); o.stop(t + d + 0.2);
+    }
+  }
+  busDoors(pos) {
+    if (!this.ready) return;
+    const out = this.spot(pos.x, pos.y, pos.z, { ref: 8, rev: 0.2 });
+    const t = this.ctx.currentTime + 0.3;
+    this.burst(t, 2600, 0.5, 0.6, 0.18, out, 'highpass');
+    this.metal(t + 0.8, [[1318, 0.08, 0.6]], out); this.metal(t + 1.15, [[1046, 0.08, 0.7]], out);
+    this.burst(t + 7.5, 2600, 0.5, 0.6, 0.15, out, 'highpass');
+  }
+
   // ---------------------------------------------------------------- fireworks & sparklers
   delayTo(x, y, z) { const c = this.lastCam; return c ? Math.hypot(x - c.x, y - c.y, z - c.z) / 343 : 0; }
   fwLaunch(x, y, z) {
