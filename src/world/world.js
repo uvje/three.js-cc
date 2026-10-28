@@ -52,6 +52,10 @@ export class World {
     buildRoads(this.plan, this.chunks, this.col, this.extras);
     buildRiver(this.plan, this.chunks, this.col, this.extras);
     buildRail(this.plan, this.chunks, this.extras);
+    // grandma's house: the farmhouse a short ride west of the shops
+    const farms = this.plan.lots.filter((l) => !l.shop && l.style === 'farm');
+    farms.sort((a, b) => Math.hypot(a.x + 250, a.z - 60) - Math.hypot(b.x + 250, b.z - 60));
+    if (farms.length) farms[0].home = true;
     buildLots(this);
     await step(0.48, 'Святилище, станция и школа');
     buildLandmarks(this);

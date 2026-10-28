@@ -782,11 +782,12 @@ export class AudioEngine {
 
   // village loudspeaker melody at 17:00
   // ---------------------------------------------------------------- the shop's little TV: koshien baseball
-  tvUpdate(level, pos) {
-    if (!this.ready || (!this.tv && level < 0.01)) return;
+  tvUpdate(level, pos, key = 'store') {
+    const tvs = (this.tvs ||= {});
+    if (!this.ready || (!tvs[key] && level < 0.01)) return;
     const c = this.ctx, now = c.currentTime;
-    if (!this.tv) {
-      const T = (this.tv = { out: this.gain(0), next: now + 3 });
+    if (!tvs[key]) {
+      const T = (tvs[key] = { out: this.gain(0), next: now + 3 });
       const p = this.panner(pos.x, pos.y, pos.z, 1.2, 1.5);
       const hp = this.filt('highpass', 320, 0.7), lp = this.filt('lowpass', 3600, 0.7);
       T.out.connect(hp).connect(lp).connect(p).connect(this.sfx);
@@ -803,7 +804,7 @@ export class AudioEngine {
       const l1 = this.osc('sine', 4.6), g1 = this.gain(0.6); l1.connect(g1).connect(am.gain); l1.start();
       const l2 = this.osc('sine', 2.3), g2 = this.gain(0.3); l2.connect(g2).connect(am.gain); l2.start();
     }
-    const T = this.tv;
+    const T = tvs[key];
     T.out.gain.setTargetAtTime(level * 0.5, now, 0.4);
     if (level < 0.01 || now < T.next) return;
     // a phrase of commentary, now and then the crack of a bat and a cheer

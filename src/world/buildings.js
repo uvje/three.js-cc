@@ -174,16 +174,31 @@ function farmhouse(L, rng, hx, hz, fw, fd, g) {
   const allWood = rng.chance(0.35);
   const frame = C(0x3a2c22);
   H('plain').box(0, 0, 0, fw + 0.12, 0.45, fd + 0.12, C(0x8c8880));
-  H('wood').box(0, 0.45, 0, fw, allWood ? 2.75 : 1.05, fd, woodC, { noTop: true });
-  if (!allWood) H('plaster').box(0, 1.5, 0, fw - 0.02, 1.7, fd - 0.02, plasterC, { noTop: true });
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) H('plain').box(sx * hw, 0.45, sz * hd, 0.16, 2.75, 0.16, darkWood);
   const genR = rng.chance(0.5);
   const ew = fw - 2.8;
   const ex = genR ? -1.4 : 1.4;
+  const open = L.lot.home; // grandma's house: the room behind the engawa stands open to the garden (see home.js)
+  if (open) {
+    const t = 0.12, x0 = ex - ew / 2, x1 = ex + ew / 2;
+    const walls = (k, y0, h, col) => {
+      const Wb = H(k);
+      Wb.box(-hw + t / 2, y0, 0, t, h, fd, col); Wb.box(hw - t / 2, y0, 0, t, h, fd, col);
+      Wb.box(0, y0, -hd + t / 2, fw - 2 * t, h, t, col);
+      if (x0 > -hw + 0.01) Wb.box((-hw + x0) / 2, y0, hd - t / 2, x0 + hw, h, t, col);
+      if (x1 < hw - 0.01) Wb.box((x1 + hw) / 2, y0, hd - t / 2, hw - x1, h, t, col);
+    };
+    walls('wood', 0.45, allWood ? 2.75 : 1.05, woodC);
+    if (!allWood) walls('plaster', 1.5, 1.7, plasterC);
+    H(allWood ? 'wood' : 'plaster').box(ex, 2.45, hd - t / 2, ew, 0.75, t, allWood ? woodC : plasterC);
+  } else {
+    H('wood').box(0, 0.45, 0, fw, allWood ? 2.75 : 1.05, fd, woodC, { noTop: true });
+    if (!allWood) H('plaster').box(0, 1.5, 0, fw - 0.02, 1.7, fd - 0.02, plasterC, { noTop: true });
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) H('plain').box(sx * hw, 0.45, sz * hd, 0.16, 2.75, 0.16, darkWood);
   H('plain').box(ex, 0.25, hd + 0.45, ew, 0.3, 0.9, C(0x7a5a3e));
   const n = Math.max(2, Math.floor(ew / 1.75));
   const shoji = rng.chance(0.45);
-  for (let i = 0; i < n; i++) win(H, wkey(shoji ? 'shoji' : 'win', g), 'f', hd, ex - ew / 2 + (i + 0.5) * (ew / n), 0.62, ew / n - 0.06, 1.85, null);
+  if (!open) for (let i = 0; i < n; i++) win(H, wkey(shoji ? 'shoji' : 'win', g), 'f', hd, ex - ew / 2 + (i + 0.5) * (ew / n), 0.62, ew / n - 0.06, 1.85, null);
   for (let i = 0; i <= n; i++) H('plain').box(ex - ew / 2 + (i * ew) / n, 0.55, hd + 0.92, 0.12, 2.6, 0.12, darkWood);
   H('plain').box(ex, 2.68, hd + 0.92, ew + 0.2, 0.14, 0.16, darkWood);
   const gx = genR ? hw - 1.35 : -hw + 1.35;
@@ -195,7 +210,7 @@ function farmhouse(L, rng, hx, hz, fw, fd, g) {
   const R = H('kawara'); R.translate(0, 3.2, 0);
   R.hipRoof(fw, fd, 0, 1.15, 0.56, roofC, { ridgeColor: ridgeC, irimoya: rng.chance(0.7), gableColor: woodC });
   L.box(hx, hz + 0.45, hw + 0.15, hd + 0.95);
-  L.lot.house = { hx, hz, fw, fd, ex, ew, gx };
+  L.lot.house = { hx, hz, fw, fd, ex, ew, gx, open, woodC, darkWood };
 }
 
 function kura(L, rng, x, z, rot) {

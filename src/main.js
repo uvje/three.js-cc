@@ -243,6 +243,7 @@ class Game {
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
     else if (it.kind === 'stall') this.openModal('shop', it.stall);
+    else if (it.kind === 'granny') { this.hud.toast('Бабушка: «' + this.home.grannyLine(this.env.time.hour) + '»'); this.stamp('granny'); }
     else if (it.kind === 'closed') this.hud.toast('Двери заперты, внутри темно. Магазин откроется в 6:30.');
     else if (it.kind === 'melon') {
       this.audio.eat();
@@ -556,6 +557,8 @@ class Game {
     this.audio.festivalUpdate(F.music, F.center, F.sizzlePos, F.on);
     const st = W.store;
     if (st) this.audio.tvUpdate(Math.hypot(cam.x - st.tvPos.x, cam.z - st.tvPos.z) < 25 ? st.light : 0, st.tvPos);
+    const hm = this.home;
+    if (hm?.tvPos) this.audio.tvUpdate(Math.hypot(cam.x - hm.tvPos.x, cam.z - hm.tvPos.z) < 25 ? hm.tvOn * 0.8 : 0, hm.tvPos, 'home');
     this.audio.update(dt, {
       hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
       cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: !!W.store?.inside(cam),
