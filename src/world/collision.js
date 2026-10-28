@@ -8,6 +8,7 @@ export class Collision {
     this.grid = new Map();
     this.pgrid = new Map();
     this.colliders = [];
+    this.dynamic = [];
     this.platforms = [];
     this._stamp = 0;
   }
@@ -42,6 +43,7 @@ export class Collision {
     return o;
   }
   remove(o) { o.flags = 0; }
+  addDynamicBox() { const o = { t: 1, x: 0, z: 0, hw: 1, hd: 1, c: 1, sn: 0, flags: 0, tag: 'dynamic', s: 0 }; this.dynamic.push(o); return o; }
 
   // Push a circle (pos.x, pos.z, radius) out of colliders. Returns the accumulated push normal (or null).
   resolve(pos, radius, mask) {
@@ -52,40 +54,36 @@ export class Collision {
       const c = this.cell;
       const ax = Math.floor((pos.x - radius - 1) / c), bx = Math.floor((pos.x + radius + 1) / c);
       const az = Math.floor((pos.z - radius - 1) / c), bz = Math.floor((pos.z + radius + 1) / c);
-      for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) {
-        const arr = this.grid.get(this.key(i, j));
-        if (!arr) continue;
-        for (const o of arr) {
-          if (o.s === stamp || !(o.flags & mask)) continue;
+      const test = (o) => {
+          if (o.s === stamp || !(o.flags & mask)) return;
           o.s = stamp;
           let nx = 0, nz = 0, pen = 0;
           if (o.t === 0) {
             const dx = pos.x - o.x, dz = pos.z - o.z, d = Math.hypot(dx, dz), rr = o.r + radius;
-            if (d >= rr) continue;
+            if (d >= rr) return;
             if (d < 1e-6) { nx = 1; nz = 0; } else { nx = dx / d; nz = dz / d; }
             pen = rr - d;
           } else if (o.t === 1) {
             const dx = pos.x - o.x, dz = pos.z - o.z;
             const lx = dx * o.c - dz * o.sn, lz = dx * o.sn + dz * o.c;
             const qx = Math.max(-o.hw, Math.min(o.hw, lx)), qz = Math.max(-o.hd, Math.min(o.hd, lz));
-            let ex = lx - qx, ez = lz - qz;
-            let d = Math.hypot(ex, ez);
+            const ex = lx - qx, ez = lz - qz;
+            const d = Math.hypot(ex, ez);
             let lnx, lnz;
-            if (d < 1e-6) { // center inside the box: push out along the shallowest axis
+            if (d < 1e-6) {
               const px = o.hw - Math.abs(lx), pz = o.hd - Math.abs(lz);
               if (px < pz) { lnx = Math.sign(lx) || 1; lnz = 0; pen = px + radius; } else { lnx = 0; lnz = Math.sign(lz) || 1; pen = pz + radius; }
             } else {
-              if (d >= radius) continue;
+              if (d >= radius) return;
               lnx = ex / d; lnz = ez / d; pen = radius - d;
             }
-            // local -> world: x = lx*c + lz*s, z = -lx*s + lz*c
             nx = lnx * o.c + lnz * o.sn; nz = -lnx * o.sn + lnz * o.c;
           } else {
             const dx = o.bx - o.ax, dz = o.bz - o.az, L2 = dx * dx + dz * dz || 1e-9;
             let t = ((pos.x - o.ax) * dx + (pos.z - o.az) * dz) / L2; t = t < 0 ? 0 : t > 1 ? 1 : t;
             const px = o.ax + dx * t, pz = o.az + dz * t;
             const ex = pos.x - px, ez = pos.z - pz, d = Math.hypot(ex, ez), rr = o.r + radius;
-            if (d >= rr) continue;
+            if (d >= rr) return;
             if (d < 1e-6) { nx = -dz; nz = dx; const l = Math.hypot(nx, nz); nx /= l; nz /= l; } else { nx = ex / d; nz = ez / d; }
             pen = rr - d;
           }
@@ -93,8 +91,12 @@ export class Collision {
           moved = true;
           if (!hit) hit = { x: 0, z: 0, tag: o.tag };
           hit.x += nx; hit.z += nz;
-        }
+      };
+      for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) {
+        const arr = this.grid.get(this.key(i, j));
+        if (arr) for (const o of arr) test(o);
       }
+      for (const o of this.dynamic) test(o);
       if (!moved) break;
     }
     if (hit) { const l = Math.hypot(hit.x, hit.z) || 1; hit.x /= l; hit.z /= l; }

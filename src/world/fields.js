@@ -48,7 +48,7 @@ export function buildFields(W) {
     const [cx, cz] = g2w((u0 + u1) / 2, (v0 + v1) / 2);
     if (c.type === 'rice') {
       const b = W.chunks.get(paddyKey, cx, cz);
-      const col = varyColor(0x9cc070, rng, 0.06);
+      const col = varyColor(rng.pick([0x9cc070, 0xa4c46c, 0x92b868, 0xa8c878, 0x98bc62]), rng, 0.07);
       b.quad(corner(u0, v1, 0.05), corner(u1, v1, 0.05), corner(u1, v0, 0.05), corner(u0, v0, 0.05), col, [u0, v1, u1, v0]);
       // levees on non-road edges
       const L = W.chunks.get('plain', cx, cz);

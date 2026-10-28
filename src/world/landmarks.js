@@ -269,7 +269,7 @@ function crossing(W, rng) {
     const pivot = new THREE.Group();
     const px = ox + rtx * side * 0.4, pz = oz + rtz * side * 0.4;
     pivot.position.set(px, y + 0.95, pz);
-    pivot.rotation.y = Math.atan2(-rtz * side, rtx * side) - Math.PI / 2;
+    pivot.rotation.y = Math.atan2(side * rtx, side * rtz);
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3), new THREE.MeshLambertMaterial({ color: 0x2a2a2a }));
     box.position.set(px, y + 0.7, pz); group.add(box);
     const armLen = road.w + 0.2;

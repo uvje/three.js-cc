@@ -34,8 +34,9 @@ export function baseHeight(x, z) {
   if (d > 0) {
     const H = 85 + 55 * nz.fbm(x * 0.0018 + 10, z * 0.0018 - 3, 3);
     const rise = 1 - Math.exp(-Math.pow(d / 85, 1.5));
-    const ridge = nz.ridged(x * 0.0055 + 3, z * 0.0055, 4);
-    h += rise * H * (0.62 + 0.55 * ridge) + d * 0.05;
+    const ridge = nz.ridged(x * 0.0045 + 3, z * 0.0045, 3);
+    const roll = nz.fbm(x * 0.006 - 7, z * 0.006 + 2, 3) * 0.5 + 0.5;
+    h += rise * H * (0.55 + 0.3 * ridge + 0.35 * roll) + d * 0.05;
   }
   h += bump(x, z, SATOYAMA.x, SATOYAMA.z, SATOYAMA.r, SATOYAMA.h);
   h += bump(x, z, -660, -40, 75, 13);
@@ -232,8 +233,9 @@ export function buildFarMountains() {
       const a = (i / seg) * Math.PI * 2;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       const k = smoothstep(950, 1800, r);
-      const ridge = nz.ridged(x * 0.0009 + 5, z * 0.0009, 5);
-      const h = -30 + k * (120 + 520 * ridge * ridge + 160 * nz.fbm(x * 0.0004, z * 0.0004, 3)) + (r > 3000 ? (r - 3000) * 0.05 : 0);
+      const ridge = nz.ridged(x * 0.0008 + 5, z * 0.0008, 4);
+      const roll = nz.fbm(x * 0.0006 + 3, z * 0.0006, 4) * 0.5 + 0.5;
+      const h = -30 + k * (110 + 260 * roll + 200 * Math.pow(ridge, 1.6)) + (r > 3000 ? (r - 3000) * 0.05 : 0);
       pos.push(x, h, z);
       c.copy(c1).lerp(c2, smoothstep(1500, 4000, r));
       col.push(c.r, c.g, c.b);

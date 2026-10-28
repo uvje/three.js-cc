@@ -511,6 +511,61 @@ export class AudioEngine {
   shopChime() { if (!this.ready) return; const t = this.ctx.currentTime; this.metal(t, [[1318, 0.06, 0.9], [2636, 0.015, 0.4]], this.sfx); this.metal(t + 0.42, [[1046, 0.06, 1.1], [2092, 0.015, 0.5]], this.sfx); }
   eat() { if (!this.ready) return; const t = this.ctx.currentTime; for (let i = 0; i < 6; i++) this.burst(t + i * 0.25, 900, 1, 0.08, 0.05); }
 
+  // ---------------------------------------------------------------- train
+  trainStart() {
+    if (!this.ready) return;
+    if (!this.trainN) {
+      const T = (this.trainN = {});
+      T.p = this.panner(0, -500, 0, 14, 0.9);
+      T.out = this.gain(1); T.out.connect(T.p).connect(this.ambOut);
+      const rs = this.gain(0.35); T.p.connect(rs).connect(this.revIn);
+      T.rumbleLP = this.filt('lowpass', 200, 0.7); T.rumble = this.gain(0);
+      this.loop(this.brown, T.rumbleLP); T.rumbleLP.connect(T.rumble).connect(T.out);
+      T.eng = this.osc('sawtooth', 46); T.engLP = this.filt('lowpass', 320, 1.2); T.engG = this.gain(0);
+      const am = this.gain(0.6); const lfo = this.osc('sine', 9); const lg = this.gain(0.4); lfo.connect(lg).connect(am.gain);
+      T.eng.connect(T.engLP).connect(am).connect(T.engG).connect(T.out); T.eng.start(); lfo.start();
+      T.sq = this.osc('triangle', 3300); const vib = this.osc('sine', 5.5), vg = this.gain(60); vib.connect(vg).connect(T.sq.frequency);
+      T.sqG = this.gain(0); T.sq.connect(T.sqG).connect(T.out); T.sq.start(); vib.start();
+    }
+  }
+  trainUpdate(pos, v, braking, dwell) {
+    const T = this.trainN; if (!T) return;
+    const t = this.ctx.currentTime;
+    this.setPos(T.p, pos.x, pos.y, pos.z);
+    T.rumble.gain.setTargetAtTime(Math.min(0.5, 0.02 + v * 0.028), t, 0.3);
+    T.rumbleLP.frequency.setTargetAtTime(120 + v * 12, t, 0.3);
+    T.engG.gain.setTargetAtTime(dwell ? 0.09 : 0.06 + Math.min(0.1, v * 0.006), t, 0.4);
+    T.eng.frequency.setTargetAtTime(dwell ? 38 : 44 + v * 2.2, t, 0.5);
+    T.sqG.gain.setTargetAtTime(braking ? 0.035 : 0, t, 0.15);
+  }
+  trainStop() { const T = this.trainN; if (!T) return; const t = this.ctx.currentTime; for (const g of [T.rumble, T.engG, T.sqG]) g.gain.setTargetAtTime(0, t, 0.5); }
+  trainClack(pos, v) {
+    if (!this.ready) return;
+    const out = this.spot(pos.x, pos.y, pos.z, { ref: 10, roll: 0.9, rev: 0.2 });
+    const t = this.ctx.currentTime + 0.01, gap = Math.min(0.35, 2.1 / Math.max(v, 1));
+    for (const d of [0, gap]) { this.burst(t + d, 900, 1.2, 0.06, 0.25, out); this.thump(t + d, 140, 70, 0.07, 0.25, out); }
+  }
+  trainHorn(pos, dur = 1) {
+    if (!this.ready) return;
+    const out = this.spot(pos.x, pos.y + 2, pos.z, { ref: 45, roll: 0.7, rev: 0.7 });
+    const t = this.ctx.currentTime + 0.02;
+    const lp = this.filt('lowpass', 1700, 0.8); const g = this.gain(0); lp.connect(g).connect(out);
+    for (const f of [440, 523.3]) { const o = this.osc('square', f); const og = this.gain(0.5); o.connect(og).connect(lp); o.start(t); o.stop(t + dur + 0.3); }
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.06); g.gain.setValueAtTime(0.15, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.25);
+  }
+  trainDoors(pos) {
+    if (!this.ready) return;
+    const out = this.spot(pos.x, pos.y + 1.5, pos.z, { ref: 8, rev: 0.3 });
+    const t = this.ctx.currentTime + 0.4;
+    for (let k = 0; k < 2; k++) { this.metal(t + k * 0.9, [[1318, 0.07, 0.6]], out); this.metal(t + k * 0.9 + 0.35, [[1046, 0.07, 0.7]], out); }
+    this.burst(t + 1.9, 3200, 0.5, 0.7, 0.12, out, 'highpass');
+  }
+  crossingBell(x, y, z) {
+    if (!this.ready) return;
+    const out = this.spot(x, y, z, { ref: 9, roll: 1, rev: 0.25 });
+    this.metal(this.ctx.currentTime + 0.01, [[742, 0.11, 0.32], [1489, 0.05, 0.22], [2215, 0.03, 0.16], [2970, 0.015, 0.1]], out);
+  }
+
   // village loudspeaker melody at 17:00
   chime(x, y, z) {
     if (!this.ready) return;

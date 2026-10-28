@@ -7,7 +7,7 @@ import { clamp, lerp, smoothstep } from '../core/noise.js';
 
 const EYE = 1.62;
 const ROLL = { asphalt: 0.07, concrete: 0.07, wood: 0.08, stone: 0.16, gravel: 0.2, dirt: 0.24, grass: 0.42, tall: 0.6, paddy: 1.6, water: 2.0 };
-const BIKE_EYE = new THREE.Vector3(0, 1.6, -0.14);
+const BIKE_EYE = new THREE.Vector3(0, 1.58, -0.08);
 
 export class Player {
   constructor(world, camera, input, audio, hud, settings) {
@@ -275,7 +275,7 @@ export class Player {
     b.setRiding(true);
     b.speed = 0;
     // look the way the bike points
-    this.headYaw = 0; this.headPitch = -0.14;
+    this.headYaw = 0; this.headPitch = -0.3;
     this.audio.kickstand();
   }
   dismount() {

@@ -267,7 +267,7 @@ export function buildLightPools(W, T) {
     vertexShader: `attribute float k; varying vec2 vUv; varying vec3 vCol; varying float vK; varying float vDist;
       void main() { vUv = uv; vCol = color; vK = k; vec4 wp = modelMatrix * vec4(position, 1.0); vDist = distance(wp.xyz, cameraPosition); gl_Position = projectionMatrix * viewMatrix * wp; }`,
     fragmentShader: `uniform sampler2D map; uniform float uLamps, uNight; varying vec2 vUv; varying vec3 vCol; varying float vK; varying float vDist;
-      void main() { float a = texture2D(map, vUv).r; float on = vK > 0.95 ? uLamps : uNight * vK; gl_FragColor = vec4(vCol * a * on * 0.22 * exp(-vDist * 0.004), 1.0); }`,
+      void main() { float a = texture2D(map, vUv).a; float on = vK > 0.95 ? uLamps : uNight * vK; gl_FragColor = vec4(vCol * a * on * 0.22 * exp(-vDist * 0.004), 1.0); }`,
     vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
   });

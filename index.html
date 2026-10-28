@@ -41,7 +41,7 @@ body { -webkit-user-select: none; user-select: none; }
 #place .jp { writing-mode: vertical-rl; font-family: var(--font-jp); font-weight: 900; font-size: 34px; letter-spacing: .12em; line-height: 1; }
 #place .ru { writing-mode: vertical-rl; font-size: 13px; font-weight: 500; color: var(--hud-dim); letter-spacing: .06em; padding-top: 6px; }
 #place .seal { writing-mode: horizontal-tb; width: 26px; height: 26px; margin-top: 8px; border: 2px solid var(--shu); color: var(--shu); border-radius: 4px; font-family: var(--font-jp); font-weight: 900; font-size: 15px; display: grid; place-items: center; text-shadow: none; background: rgba(255, 250, 240, .85); transform: rotate(-6deg); }
-#prompt { left: 50%; bottom: calc(15% + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 17px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(12, 22, 30, .38); white-space: nowrap; opacity: 0; transition: opacity .2s; }
+#prompt { left: 50%; bottom: calc(26% + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 17px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(12, 22, 30, .38); white-space: nowrap; opacity: 0; transition: opacity .2s; }
 #prompt.show { opacity: 1; }
 #prompt kbd, .keys kbd { font-family: var(--font-ui); font-weight: 800; display: inline-block; min-width: 1.6em; padding: 1px 6px; margin-right: 6px; border-radius: 6px; background: var(--hud); color: var(--ink); text-shadow: none; text-align: center; }
 #toasts { left: 50%; top: calc(18px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }

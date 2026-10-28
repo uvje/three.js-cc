@@ -13,6 +13,7 @@ import { F } from './world/planner.js';
 import { Player } from './player/player.js';
 import { AudioEngine } from './audio/audio.js';
 import { HUD, STAMPS } from './ui/hud.js';
+import { Trains } from './world/train.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -107,6 +108,7 @@ class Game {
     this.world.game = this;
     await this.world.generate(progress);
     this.hud.buildMap(this.world);
+    this.trains = new Trains(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -227,7 +229,11 @@ class Game {
       setTimeout(() => this.hud.toast(`Хлоп-хлоп. Желание загадано. Омикудзи: ${f[0]} — ${f[1]}.`), 2400);
       this.stamp('shrine');
     } else if (it.kind === 'timetable') {
-      this.hud.toast('Расписание выгорело на солнце. Кажется, поезд ходит раз в несколько часов.');
+      const tr = this.trains.nextTrains(this.env.time.hour);
+      const sp = this.env.time.speed / 3600;
+      const fmt = (h) => { h = ((h % 24) + 24) % 24; const H = Math.floor(h), M = Math.floor((h - H) * 60); return `${String(H).padStart(2, '0')}:${String(M).padStart(2, '0')}`; };
+      const txt = tr.map((e) => `${fmt(e.t + 50 * sp)} → ${e.dir === 'east' ? 'Хигасияма' : 'Мидзусава'}`).join(' · ');
+      this.hud.toast('Расписание, なつめ駅: ' + txt);
     }
     void P;
   }
@@ -269,12 +275,16 @@ class Game {
   onSit(sp) {
     this.env.time.boost = 6;
     this.hud.toast('Время течёт медленно и лениво… Держи T, чтобы оно бежало быстрее.');
-    if (sp.label.includes('поезд')) this.stamp('station');
     if (sp.busStop) this.stamp('busstop');
     const h = this.env.time.hour;
     if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
   }
   onStand() { this.env.time.boost = 1; }
+  onTrainArrive(run) {
+    const P = this.player, S = this.world.plan.areas.station;
+    const d = Math.hypot(P.pos.x - S.plat[0], P.pos.z - S.plat[1]);
+    if (d < 40) { this.stamp('station'); this.hud.toast(`Пин-пон. Поезд на ${run.destRu} стоит у платформы.`); }
+  }
   addMoney(v) { this.money += v; this.hud.setMoney(this.money); store.set('money', this.money); }
   stamp(id) {
     if (this.stamps.has(id)) return;
@@ -361,6 +371,7 @@ class Game {
     const envDt = playing || this.state === 'title' ? dt : 0;
     this.env.update(envDt, this.tSec, this.camera, P.pos);
     this.world.update(dt, this.tSec, this.camera.position, time);
+    if (this.state === 'play' || this.state === 'title') this.trains.update(this.modal ? 0 : dt, time, this.tSec);
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);
     // post fx
