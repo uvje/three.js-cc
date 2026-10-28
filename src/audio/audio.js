@@ -214,6 +214,7 @@ export class AudioEngine {
       L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0;
     } else { L.setPosition(cam.x, cam.y, cam.z); L.setOrientation(env.fwd.x, env.fwd.y, env.fwd.z, 0, 1, 0); }
     const set = (param, v, tc = 0.6) => param.setTargetAtTime(v, t, tc);
+    this.lastCam = cam;
     const gust = env.gust;
     set(B.wind.gain, (0.035 + 0.13 * gust) * (env.indoor ? 0.3 : 1), 0.8);
     set(B.windLP.frequency, 260 + 520 * gust, 0.8);
@@ -565,6 +566,59 @@ export class AudioEngine {
     const out = this.spot(x, y, z, { ref: 9, roll: 1, rev: 0.25 });
     this.metal(this.ctx.currentTime + 0.01, [[742, 0.11, 0.32], [1489, 0.05, 0.22], [2215, 0.03, 0.16], [2970, 0.015, 0.1]], out);
   }
+
+  purr(x, y, z) {
+    if (!this.ready) return;
+    const out = this.spot(x, y, z, { ref: 1.5, roll: 1.4 });
+    const t = this.ctx.currentTime, s = this.ctx.createBufferSource(); s.buffer = this.brown;
+    const lp = this.filt('lowpass', 160, 1), am = this.gain(0.4), lfo = this.osc('sine', 24), lg = this.gain(0.6), g = this.gain(0);
+    lfo.connect(lg).connect(am.gain); s.connect(lp).connect(am).connect(g).connect(out);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.3); g.gain.setValueAtTime(0.5, t + 2.4); g.gain.linearRampToValueAtTime(0, t + 3);
+    s.start(t, Math.random() * 2); lfo.start(t); s.stop(t + 3.1); lfo.stop(t + 3.1);
+  }
+  meow(x, y, z, angry = false) {
+    if (!this.ready) return;
+    const out = this.spot(x, y, z, { ref: 3, roll: 1.1, rev: 0.15 });
+    const t = this.ctx.currentTime + 0.02, d = angry ? 0.35 : 0.65;
+    const o = this.osc('sawtooth', 500), f1 = this.filt('bandpass', 900, 3), f2 = this.filt('bandpass', 2600, 4), g = this.gain(0);
+    o.connect(f1).connect(g); o.connect(f2).connect(g); g.connect(out);
+    o.frequency.setValueAtTime(angry ? 700 : 520, t); o.frequency.linearRampToValueAtTime(angry ? 900 : 760, t + d * 0.35); o.frequency.linearRampToValueAtTime(angry ? 600 : 480, t + d);
+    f1.frequency.setValueAtTime(700, t); f1.frequency.linearRampToValueAtTime(1300, t + d * 0.4); f1.frequency.linearRampToValueAtTime(800, t + d);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.05); g.gain.setValueAtTime(0.14, t + d * 0.7); g.gain.linearRampToValueAtTime(0, t + d);
+    o.start(t); o.stop(t + d + 0.05);
+  }
+
+  // ---------------------------------------------------------------- fireworks & sparklers
+  delayTo(x, y, z) { const c = this.lastCam; return c ? Math.hypot(x - c.x, y - c.y, z - c.z) / 343 : 0; }
+  fwLaunch(x, y, z) {
+    if (!this.ready) return;
+    const out = this.spot(x, y + 40, z, { ref: 80, roll: 0.6, rev: 0.4 });
+    const t = this.ctx.currentTime + this.delayTo(x, y, z);
+    const o = this.osc('sine', 500), g = this.gain(0);
+    o.connect(g).connect(out);
+    o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(1500, t + 2.2);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.2); g.gain.linearRampToValueAtTime(0, t + 2.3);
+    o.start(t); o.stop(t + 2.4);
+    this.burst(t, 3000, 0.6, 0.4, 0.05, out, 'highpass');
+  }
+  fwBurst(x, y, z, type) {
+    if (!this.ready) return;
+    const out = this.spot(x, y, z, { ref: 120, roll: 0.5, rev: 0.9 });
+    const t = this.ctx.currentTime + this.delayTo(x, y, z);
+    this.thump(t, 85, 32, 1.4, 0.9, out);
+    this.burst(t, 420, 0.6, 0.9, 0.7, out, 'lowpass');
+    this.burst(t + 0.02, 1400, 0.7, 0.25, 0.25, out);
+    if (type === 'senrin' || type === 'kamuro') for (let k = 0; k < 34; k++) this.burst(t + 0.7 + Math.random() * 1.6, 2500 + Math.random() * 3000, 1.5, 0.025, 0.12, out);
+  }
+  sparklerStart() { this.spark = 0; }
+  sparklerUpdate(phase, dt) {
+    if (!this.ready) return;
+    const rate = [6, 70, 34, 10, 0][phase];
+    this.spark = (this.spark || 0) + rate * dt;
+    const t = this.ctx.currentTime;
+    while (this.spark > 1) { this.spark -= 1; this.burst(t + Math.random() * 0.05, 3500 + Math.random() * 4000, 2, 0.012 + Math.random() * 0.015, phase === 1 ? 0.06 : 0.035); }
+  }
+  sparklerStop() { this.spark = 0; }
 
   // village loudspeaker melody at 17:00
   chime(x, y, z) {

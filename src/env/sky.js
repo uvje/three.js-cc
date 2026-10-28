@@ -52,9 +52,9 @@ void main() {
     col += vec3(0.5, 0.56, 0.78) * band * smoothstep(0.35, 0.8, mwn) * 0.22 * uStars * smoothstep(0.05, 0.4, h);
   }
   float md = dot(d, uMoonDir);
-  float moon = smoothstep(0.99962, 0.99978, md);
+  float moon = smoothstep(0.99972, 0.99984, md);
   float shade = 0.75 + 0.25 * smoothstep(-0.02, 0.02, dot(d - uMoonDir, normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)))));
-  col = mix(col, vec3(1.0, 0.97, 0.88) * 1.8 * shade, moon * uMoonLight);
+  col = mix(col, vec3(1.0, 0.97, 0.88) * 1.25 * shade, moon * uMoonLight);
   col += vec3(0.45, 0.55, 0.8) * (pow(max(md, 0.0), 300.0) * 0.35 + pow(max(md, 0.0), 30.0) * 0.04) * uMoonLight;
   if (h > 0.0) {
     vec2 cp = d.xz / (h + 0.1) * 1.4 + vec2(uTime * 0.0045, uTime * 0.0018);

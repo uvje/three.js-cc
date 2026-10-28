@@ -14,6 +14,8 @@ import { Player } from './player/player.js';
 import { AudioEngine } from './audio/audio.js';
 import { HUD, STAMPS } from './ui/hud.js';
 import { Trains } from './world/train.js';
+import { Fireworks, Sparkler } from './world/fireworks.js';
+import { Villagers } from './world/npc.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -45,6 +47,7 @@ class Game {
     this.settings = Object.assign({ sens: 1, vol: 0.8, amb: 1, quality: 'medium', invertY: false, mouseSteer: false, timeIdx: 3 }, store.get('settings', {}));
     this.stamps = new Set(store.get('stamps', []));
     this.money = store.get('money', 2000);
+    this.sparklers = store.get('sparklers', 0);
     this.state = 'loading';
     this.tSec = 0;
     this.canvas = $('c');
@@ -109,6 +112,10 @@ class Game {
     await this.world.generate(progress);
     this.hud.buildMap(this.world);
     this.trains = new Trains(this.world, this.audio);
+    const rv = this.world.plan.river, fq = rv.poly.nearest(330, 222, 60);
+    this.fireworks = new Fireworks(this.scene, this.audio, { x: fq.x, y: rv.poly.sampleArray(rv.water, fq.s), z: fq.z });
+    this.sparkler = new Sparkler(this.camera, this.scene, this.audio);
+    this.villagers = new Villagers(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -157,6 +164,7 @@ class Game {
       }
       if (this.state === 'play' && !this.modal) {
         if (e.code === 'KeyH') document.body.classList.toggle('hide-hud');
+        if (e.code === 'KeyF') this.lightSparkler();
         if (e.code === 'BracketRight') { this.settings.timeIdx = Math.min(SPEEDS.length - 1, this.settings.timeIdx + 1); this.applyTimeSpeed(true); }
         if (e.code === 'BracketLeft') { this.settings.timeIdx = Math.max(0, this.settings.timeIdx - 1); this.applyTimeSpeed(true); }
       }
@@ -220,6 +228,11 @@ class Game {
       setTimeout(() => this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`), 1100);
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
+    else if (it.kind === 'cat') {
+      this.villagers.pet(it.cat);
+      this.hud.toast(['Мррр… Кошка щурится на солнце.', 'Кошка подставляет ухо. Мурлычет.', 'Тёплая, пахнет нагретой травой.'][Math.floor(Math.random() * 3)]);
+      this.stamp('cat');
+    }
     else if (it.kind === 'pray') {
       if (this.money < 5) { this.hud.toast('Нужна хотя бы монетка в 5 иен'); return; }
       this.addMoney(-5);
@@ -247,7 +260,7 @@ class Game {
           { name: 'Какигори с клубничным сиропом', price: 200, msg: 'Голова чуть-чуть замёрзла. Это и есть лето.' },
           { name: 'Горсть дагаси — мелких сладостей', price: 50, msg: 'Жевательная конфета, кислый порошок и крошечное печенье в форме рыбки.' },
           { name: 'Кукурузная палочка', price: 15, msg: 'Хрустит. Пальцы в сырной пудре.' },
-          { name: 'Набор бенгальских огней', price: 300, msg: 'Бабушка улыбается: «Только вечером, у воды». Огоньки — на следующий раз.' },
+          { name: 'Сэнко-ханаби — 5 бенгальских огней', price: 300, msg: 'Бабушка улыбается: «Только когда стемнеет». Нажми F ночью, чтобы зажечь.', sparklers: 5 },
         ],
       },
       diner: {
@@ -267,6 +280,7 @@ class Game {
       this.addMoney(-it.price);
       this.hud.toast(it.msg);
       if (kind === 'store') this.stamp('dagashi');
+      if (it.sparklers) { this.sparklers += it.sparklers; store.set('sparklers', this.sparklers); }
       if (it.meal) { this.audio.eat(); this.env.time.hour += 0.5; this.stamp('diner'); this.hud.toast('Пока ел, прошло полчаса.'); }
       refresh();
     });
@@ -280,6 +294,16 @@ class Game {
     if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
   }
   onStand() { this.env.time.boost = 1; }
+  lightSparkler() {
+    if (this.sparkler.active) return;
+    if (this.sparklers <= 0) { this.hud.toast('Бенгальских огней нет — их продают в «Нацумэ сётэн»'); return; }
+    if (this.env.time.night < 0.6) { this.hud.toast('Сэнко-ханаби зажигают, когда стемнеет'); return; }
+    if (this.player.mode === 'bike') { this.hud.toast('Сначала слезь с велосипеда'); return; }
+    this.sparklers--; store.set('sparklers', this.sparklers);
+    this.sparkler.light_();
+    this.hud.toast(`Шипит, разгорается… (осталось ${this.sparklers})`);
+    this.stamp('senko');
+  }
   onTrainArrive(run) {
     const P = this.player, S = this.world.plan.areas.station;
     const d = Math.hypot(P.pos.x - S.plat[0], P.pos.z - S.plat[1]);
@@ -341,6 +365,11 @@ class Game {
       for (let k = 0; k < 3; k++) this.audio.templeBell(600, 60, 520, k * 9);
       this.hud.toast('Где-то за холмами звонит храмовый колокол.');
     }
+    if (crossed(20) && !this.fireworks.show) {
+      this.fireworks.start(150);
+      this.hud.toast('Над рекой начинается летний фейерверк — ханаби!');
+      this.stamp('hanabi');
+    }
     if (crossed(7)) { this.addMoney(500); this.hud.toast('Утро. Бабушка оставила на столе 500 иен на карманные расходы.'); }
   }
 
@@ -353,7 +382,7 @@ class Game {
     const P = this.player, time = this.env.time;
     const playing = this.state === 'play' && !this.modal;
     if (playing) {
-      time.boost = this.input.down('KeyT') ? 40 : P.mode === 'sit' ? 6 : 1;
+      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : P.mode === 'sit' ? 6 : 1;
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
@@ -371,7 +400,13 @@ class Game {
     const envDt = playing || this.state === 'title' ? dt : 0;
     this.env.update(envDt, this.tSec, this.camera, P.pos);
     this.world.update(dt, this.tSec, this.camera.position, time);
-    if (this.state === 'play' || this.state === 'title') this.trains.update(this.modal ? 0 : dt, time, this.tSec);
+    if (this.state === 'play' || this.state === 'title') {
+      this.trains.update(this.modal ? 0 : dt, time, this.tSec);
+      const pr = this.renderer.getPixelRatio(), hh = this.renderer.domElement.height / pr;
+      this.fireworks.update(this.modal ? 0 : dt, this.camera.position, pr, hh);
+      this.sparkler.update(this.modal ? 0 : dt, pr, hh);
+      this.villagers.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
+    }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);
     // post fx
