@@ -195,7 +195,7 @@ class Game {
     const hourEl = $('setHour');
     hourEl.addEventListener('input', () => { const h = parseFloat(hourEl.value); this.env.time.hour = h; $('setHourOut').textContent = this.env.time.clock(); this.prevHour = h; });
     const qEl = $('setQuality'); qEl.value = this.settings.quality;
-    qEl.addEventListener('change', () => { this.setQuality(qEl.value); store.set('settings', this.settings); });
+    qEl.addEventListener('change', () => { this.settings.qualityManual = true; this.setQuality(qEl.value); store.set('settings', this.settings); });
     const inv = $('setInvert'); inv.checked = this.settings.invertY; inv.addEventListener('change', () => { this.settings.invertY = inv.checked; store.set('settings', this.settings); });
     const ms = $('setMouseSteer'); ms.checked = this.settings.mouseSteer; ms.addEventListener('change', () => { this.settings.mouseSteer = ms.checked; store.set('settings', this.settings); });
   }
@@ -469,15 +469,33 @@ class Game {
     if (crossed(7)) { this.addMoney(500); this.hud.toast('Утро. Бабушка оставила на столе 500 иен на карманные расходы.'); }
   }
 
+  // On a slow machine, drop to low quality once, early on, unless the player picked the quality themselves.
+  watchPerformance(raw) {
+    if (this.perfDone || this.settings.qualityManual || this.settings.quality === 'low') return;
+    this.playT = (this.playT || 0) + raw;
+    if (this.playT < 3) return; // let shaders compile first
+    this.perfT = (this.perfT || 0) + raw; this.perfN = (this.perfN || 0) + 1;
+    if (this.perfT < 6) return;
+    this.perfDone = true;
+    if (this.perfT / this.perfN > 0.045) {
+      this.setQuality('low');
+      $('setQuality').value = 'low';
+      store.set('settings', this.settings);
+      this.hud.toast('Картинка стала проще, чтобы игра шла плавнее. Качество можно вернуть в меню (Esc).');
+    }
+  }
+
   // ---------------- loop
   frame(now) {
-    const dt = Math.min(0.05, (now - (this.last || now)) / 1000);
+    const raw = (now - (this.last || now)) / 1000;
+    const dt = Math.min(0.05, raw);
     this.last = now;
     this.tSec += dt;
     if (this.state === 'loading') { this.renderer.setClearColor(0x0e1530); this.renderer.clear(); return; }
     const P = this.player, time = this.env.time;
     const playing = this.state === 'play' && !this.modal;
     if (playing) {
+      this.watchPerformance(raw);
       const fest = this.world.festival;
       time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : fest.open && fest.near(P.pos) ? 0.4 : P.mode === 'sit' ? 6 : 1;
       P.update(dt, this.tSec, time);

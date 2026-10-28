@@ -154,13 +154,16 @@ class FieldLayer {
     const oa = new THREE.InstancedBufferAttribute(new Float32Array(offs), 3);
     const ra = new THREE.InstancedBufferAttribute(new Float32Array(rnds), 3);
     this.count = count;
-    this.geos = [1, 0.5, 0.22].map((f) => {
+    this.lodF = [1, 0.5, 0.22];
+    this.geos = this.lodF.map((f) => {
       const g = instGeo(base, oa, ra, Math.floor(count * f));
       g.boundingSphere = new THREE.Sphere(new THREE.Vector3(o.tile / 2, 0, o.tile / 2), o.tile * 0.75 + 6);
       return g;
     });
   }
   setRadius(r) { this.radius = r; this.shared.uFade.value.set(r * 0.72, r); }
+  // instances are shuffled, so drawing only the first part of them thins the layer evenly without wasting vertex work
+  setDensity(k) { this.geos.forEach((g, i) => { g.instanceCount = Math.max(1, Math.floor(this.count * this.lodF[i] * k)); }); }
   update(cam) {
     this.shared.uCamPos.value.copy(cam);
     const T = this.tile, R = this.radius;
@@ -237,8 +240,8 @@ export class GrassSystem {
     const gr = q === 'high' ? 46 : q === 'low' ? 26 : 36;
     const rr = q === 'high' ? 44 : q === 'low' ? 24 : 34;
     this.grass.setRadius(gr); this.rice.setRadius(rr);
-    this.grass.shared.uDens.value = q === 'low' ? 0.55 : 1;
-    this.rice.shared.uDens.value = q === 'low' ? 0.6 : 1;
+    this.grass.setDensity(q === 'low' ? 0.55 : 1);
+    this.rice.setDensity(q === 'low' ? 0.6 : 1);
   }
   update(cam) { this.grass.update(cam); this.rice.update(cam); }
 }

@@ -186,20 +186,7 @@ export function buildTerrainMesh(hm, groundTex, detailTex) {
     colr[p * 3] = k; colr[p * 3 + 1] = k; colr[p * 3 + 2] = k;
     p++;
   }
-  const idx = new Uint32Array((nx - 1) * (nzc - 1) * 6);
-  let q = 0;
-  for (let j = 0; j < nzc - 1; j++) for (let i = 0; i < nx - 1; i++) {
-    const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
-    idx[q++] = a; idx[q++] = c; idx[q++] = b;
-    idx[q++] = b; idx[q++] = c; idx[q++] = d;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setAttribute('color', new THREE.BufferAttribute(colr, 3));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeBoundingSphere();
+  const attrs = { position: new THREE.BufferAttribute(pos, 3), normal: new THREE.BufferAttribute(nor, 3), uv: new THREE.BufferAttribute(uv, 2), color: new THREE.BufferAttribute(colr, 3) };
   const mat = patch(new THREE.MeshLambertMaterial({ map: groundTex, vertexColors: true }), {
     key: 'terrain',
     frag: (sh) => {
@@ -213,11 +200,33 @@ export function buildTerrainMesh(hm, groundTex, detailTex) {
           diffuseColor.rgb *= mix(1.0, (0.8 + 0.4 * dta.r) * (0.92 + 0.16 * dta.b), fadeD) * (0.86 + 0.28 * dtb.g);`);
     },
   });
-  const mesh = new THREE.Mesh(g, mat);
-  mesh.receiveShadow = true;
-  mesh.matrixAutoUpdate = false;
-  mesh.name = 'terrain';
-  return mesh;
+  // blocks share the vertex buffers but each has its own index range and bounds, so the ones behind the camera
+  // are culled
+  const group = new THREE.Group();
+  group.name = 'terrain';
+  const B = 64;
+  for (let bj = 0; bj < nzc - 1; bj += B) for (let bi = 0; bi < nx - 1; bi += B) {
+    const i1 = Math.min(nx - 1, bi + B), j1 = Math.min(nzc - 1, bj + B);
+    const idx = new Uint32Array((i1 - bi) * (j1 - bj) * 6);
+    let q = 0, y0 = Infinity, y1 = -Infinity;
+    for (let j = bj; j < j1; j++) for (let i = bi; i < i1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
+      idx[q++] = a; idx[q++] = c; idx[q++] = b;
+      idx[q++] = b; idx[q++] = c; idx[q++] = d;
+    }
+    for (let j = bj; j <= j1; j++) for (let i = bi; i <= i1; i++) { const y = pos[(j * nx + i) * 3 + 1]; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const g = new THREE.BufferGeometry();
+    for (const k in attrs) g.setAttribute(k, attrs[k]);
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.boundingBox = new THREE.Box3(new THREE.Vector3(xs[bi], y0, zs[bj]), new THREE.Vector3(xs[i1], y1, zs[j1]));
+    g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.name = 'terrain';
+    group.add(mesh);
+  }
+  return group;
 }
 
 // Distant mountain ring beyond the heightmap, lost in summer haze

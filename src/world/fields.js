@@ -108,7 +108,7 @@ export function buildFields(W) {
     } else if (c.type === 'sunflower') {
       for (let u = u0 + 0.8; u < u1 - 0.6; u += 0.62) for (let v = v0 + 0.8; v < v1 - 0.6; v += 0.95) {
         const [x, z] = g2w(u + rng.float(-0.12, 0.12), v + rng.float(-0.15, 0.15));
-        sunflowers.push([x, y, z, rng.float(0.8, 1.15), rng.float(-0.5, 0.5)]);
+        sunflowers.push([x, y, z, rng.float(0.8, 1.15), rng.float(-0.5, 0.5), W.sunflowerFields.length]);
       }
       const b = W.chunks.get('plain', cx, cz);
       b.quad(corner(u0, v1, 0.02), corner(u1, v1, 0.02), corner(u1, v0, 0.02), corner(u0, v0, 0.02), C(0x5a4a30));
@@ -153,13 +153,20 @@ function buildSunflowers(W, list) {
   b.pop();
   const geo = b.build();
   const mat = patch(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), { wind: 0.02, windBase: 0.2, key: 'sunf' });
-  const mesh = new THREE.InstancedMesh(geo, mat, list.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  list.forEach(([x, y, z, sc, r], i) => {
-    p.set(x, y, z); q.setFromAxisAngle(up, Math.PI / 2 + r); s.set(sc, sc, sc);
-    m4.compose(p, q, s); mesh.setMatrixAt(i, m4);
+  // one instanced mesh per field, so fields out of view or far away are skipped (see World.update)
+  W.sunflowerMeshes = [];
+  W.sunflowerFields.forEach((f, fi) => {
+    const mine = list.filter((e) => e[5] === fi);
+    if (!mine.length) return;
+    const mesh = new THREE.InstancedMesh(geo, mat, mine.length);
+    mine.forEach(([x, y, z, sc, r], i) => {
+      p.set(x, y, z); q.setFromAxisAngle(up, Math.PI / 2 + r); s.set(sc, sc, sc);
+      m4.compose(p, q, s); mesh.setMatrixAt(i, m4);
+    });
+    mesh.computeBoundingSphere();
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    W.scene.add(mesh);
+    W.sunflowerMeshes.push({ mesh, x: f.x, z: f.z });
   });
-  mesh.computeBoundingSphere();
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  W.scene.add(mesh);
 }

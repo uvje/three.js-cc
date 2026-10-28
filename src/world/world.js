@@ -101,6 +101,11 @@ export class World {
     this.moths.update(pr, hgt);
     this.lightPool.update(cam, time);
     this.store?.update(dt, tSec, time, cam);
+    for (const s of this.sunflowerMeshes || []) {
+      const d = Math.hypot(s.x - cam.x, s.z - cam.z);
+      s.mesh.visible = d < 330;
+      s.mesh.castShadow = d < 110;
+    }
     const M = this.M;
     for (const m of M.windowGroups.A) m.emissiveIntensity = time.winA * (m === M.doorA ? 0.7 : 0.95);
     for (const m of M.windowGroups.B) m.emissiveIntensity = time.winB * (m === M.doorB ? 0.7 : 0.95);
