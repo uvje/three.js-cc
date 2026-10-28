@@ -50,6 +50,8 @@ body { -webkit-user-select: none; user-select: none; }
 #speed { right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; opacity: 0; transition: opacity .4s; }
 #speed small { font-size: 13px; font-weight: 500; color: var(--hud-dim); margin-left: 4px; }
 #speed.show { opacity: 1; }
+#fade { position: fixed; inset: 0; background: #05070c; opacity: 0; pointer-events: none; transition: opacity 1.4s ease; }
+#fade.on { opacity: 1; }
 #dot { left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--hud); opacity: .55; }
 #hint { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); font-size: 12.5px; color: var(--hud-dim); line-height: 1.6; }
 body.hide-hud .hud { display: none; }
@@ -127,6 +129,7 @@ body.hide-hud .hud { display: none; }
 <div id="speed" class="hud">0<small>км/ч</small></div>
 <div id="dot" class="hud" hidden></div>
 <div id="hint" class="hud" hidden></div>
+<div id="fade"></div>
 
 <div id="title" class="overlay">
   <div class="wrap">

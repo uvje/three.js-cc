@@ -18,6 +18,8 @@ import { Fireworks, Sparkler } from './world/fireworks.js';
 import { Villagers } from './world/npc.js';
 import { Traffic } from './world/traffic.js';
 import { Weather } from './env/weather.js';
+import { Home } from './world/home.js';
+import { Wildlife } from './world/wildlife.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -112,6 +114,7 @@ class Game {
     this.world = new World(this.scene, this.renderer, this.settings.quality);
     this.world.game = this;
     await this.world.generate(progress);
+    this.home = new Home(this.world);
     this.hud.buildMap(this.world);
     this.trains = new Trains(this.world, this.audio);
     const rv = this.world.plan.river, fq = rv.poly.nearest(330, 222, 60);
@@ -121,6 +124,7 @@ class Game {
     this.traffic = new Traffic(this.world, this.audio);
     this.weather = new Weather(this.scene, this.audio);
     this.env.weather = this.weather;
+    this.wildlife = new Wildlife(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -146,6 +150,7 @@ class Game {
     this.hud.setMoney(this.money);
     this.hud.place({ jp: 'なつめ村', ru: 'Деревня Нацумэ · 15:30, август', seal: '夏' });
     setTimeout(() => this.hud.toast('W — идти, E — сесть на велосипед. Он стоит справа от тебя.'), 1500);
+    setTimeout(() => this.hud.toast('Бабушкин дом отмечен на карте (M) знаком 家 — там можно переночевать.'), 7000);
     this.canvas.focus();
   }
 
@@ -233,6 +238,11 @@ class Game {
       setTimeout(() => this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`), 1100);
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
+    else if (it.kind === 'melon') {
+      this.audio.eat();
+      this.hud.toast(['Сочно и холодно. Косточки — в сад, кто дальше.', 'Арбуз из колодца, ледяной. Бабушка посолила кончик — так слаще.'][Math.floor(Math.random() * 2)]);
+      this.stamp('melon');
+    } else if (it.kind === 'sleep') this.sleep();
     else if (it.kind === 'cat') {
       this.villagers.pet(it.cat);
       this.hud.toast(['Мррр… Кошка щурится на солнце.', 'Кошка подставляет ухо. Мурлычет.', 'Тёплая, пахнет нагретой травой.'][Math.floor(Math.random() * 3)]);
@@ -295,10 +305,31 @@ class Game {
     this.env.time.boost = 6;
     this.hud.toast('Время течёт медленно и лениво… Держи T, чтобы оно бежало быстрее.');
     if (sp.busStop) this.stamp('busstop');
+    if (sp.engawa && (this.env.time.hour > 17.5 || this.env.time.hour < 2)) this.stamp('engawa');
     const h = this.env.time.hour;
     if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
   }
   onStand() { this.env.time.boost = 1; }
+  sleep() {
+    const t = this.env.time, h = t.hour;
+    if (h > 5 && h < 18.5) { this.hud.toast('Спать ещё рано. Бабушка зовёт ужинать к семи.'); return; }
+    const fade = document.getElementById('fade');
+    fade.classList.add('on');
+    this.state = 'sleeping';
+    this.input.clear();
+    setTimeout(() => {
+      if (h >= 18.5) t.day++;
+      t.hour = 6.4; this.prevHour = 6.4;
+      const P = this.player, hp = this.home.homePos;
+      if (P.mode === 'sit') P.standUp();
+      P.pos.set(hp.x, this.world.groundAt(hp.x, hp.z).h, hp.z);
+      P.trans = 1;
+      this.state = 'play';
+      fade.classList.remove('on');
+      this.hud.toast('Доброе утро! Пахнет мисо-супом и мокрой от росы травой.');
+      this.stamp('sleep');
+    }, 1800);
+  }
   lightSparkler() {
     if (this.sparkler.active) return;
     if (this.sparklers <= 0) { this.hud.toast('Бенгальских огней нет — их продают в «Нацумэ сётэн»'); return; }
@@ -422,6 +453,8 @@ class Game {
       this.villagers.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       this.traffic.update(this.modal ? 0 : dt, time, this.player);
       this.weather.update(this.modal ? 0 : dt, time, this.camera.position);
+      this.wildlife.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
+      this.home.update(dt, this.tSec, time, this.camera.position);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

@@ -610,6 +610,13 @@ export class AudioEngine {
     if (close) this.burst(t, 1800, 0.4, 0.4, 0.5 * A, this.ambOut, 'highpass');
   }
 
+  wingFlap(x, y, z) {
+    if (!this.ready) return;
+    const out = this.spot(x, y, z, { ref: 6, rev: 0.2 });
+    const t = this.ctx.currentTime;
+    for (let k = 0; k < 6; k++) this.burst(t + k * 0.13, 500, 0.5, 0.1, 0.25 * (1 - k / 7), out, 'lowpass');
+  }
+
   // ---------------------------------------------------------------- road traffic
   vehicle(v, pos) {
     if (!this.ready) return;

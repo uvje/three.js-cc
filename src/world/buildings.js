@@ -191,6 +191,7 @@ function farmhouse(L, rng, hx, hz, fw, fd, g) {
   const R = H('kawara'); R.translate(0, 3.2, 0);
   R.hipRoof(fw, fd, 0, 1.15, 0.56, roofC, { ridgeColor: ridgeC, irimoya: rng.chance(0.7), gableColor: woodC });
   L.box(hx, hz + 0.45, hw + 0.15, hd + 0.95);
+  L.lot.house = { hx, hz, fw, fd, ex, ew, gx };
 }
 
 function kura(L, rng, x, z, rot) {
