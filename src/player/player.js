@@ -263,7 +263,7 @@ export class Player {
     };
     const b = this.bike;
     consider(b.x, b.z, 2.3, { text: 'Сесть на велосипед', key: 'E', act: () => this.mount() });
-    for (const it of W.interact) if (Math.abs(it.x - px) < 4 && Math.abs(it.z - pz) < 4 && Math.abs(it.y - this.pos.y) < 2.5) consider(it.x, it.z, it.r, { text: it.label, key: 'E', act: () => W.game.interact(it) });
+    for (const it of W.interact) if ((!it.when || it.when()) && Math.abs(it.x - px) < 4 && Math.abs(it.z - pz) < 4 && Math.abs(it.y - this.pos.y) < 2.5) consider(it.x, it.z, it.r, { text: it.label, key: 'E', act: () => W.game.interact(it) });
     for (const sp of W.sitSpots) if (Math.abs(sp.x - px) < 3 && Math.abs(sp.z - pz) < 3 && Math.abs(sp.y - this.pos.y) < 2) consider(sp.x, sp.z, 1.6, { text: sp.label, key: 'E', act: () => this.sitDown(sp) });
     this.prompt = best;
   }

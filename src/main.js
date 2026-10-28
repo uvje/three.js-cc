@@ -18,7 +18,6 @@ import { Fireworks, Sparkler } from './world/fireworks.js';
 import { Villagers } from './world/npc.js';
 import { Traffic } from './world/traffic.js';
 import { Weather } from './env/weather.js';
-import { Home } from './world/home.js';
 import { Wildlife } from './world/wildlife.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
@@ -114,7 +113,8 @@ class Game {
     this.world = new World(this.scene, this.renderer, this.settings.quality);
     this.world.game = this;
     await this.world.generate(progress);
-    this.home = new Home(this.world);
+    this.home = this.world.home;
+    this.home.showGoldfish(!!store.get('kingyo', false));
     this.hud.buildMap(this.world);
     this.trains = new Trains(this.world, this.audio);
     const rv = this.world.plan.river, fq = rv.poly.nearest(330, 222, 60);
@@ -238,6 +238,7 @@ class Game {
       setTimeout(() => this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`), 1100);
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
+    else if (it.kind === 'stall') this.openModal('shop', it.stall);
     else if (it.kind === 'melon') {
       this.audio.eat();
       this.hud.toast(['Сочно и холодно. Косточки — в сад, кто дальше.', 'Арбуз из колодца, ледяной. Бабушка посолила кончик — так слаще.'][Math.floor(Math.random() * 2)]);
@@ -287,19 +288,62 @@ class Game {
           { name: 'Какигори с зелёным чаем и бобами', price: 280, msg: 'Горьковато-сладко. Тает на языке.' },
         ],
       },
+      tako: {
+        title: 'たこ焼き', sub: 'Хозяин ловко переворачивает шарики спицей. Шипит масло, пахнет соусом и бонито.',
+        items: [
+          { name: 'Такояки — шесть шариков с осьминогом', price: 400, msg: 'Горячо-горячо! Внутри кусочек осьминога, сверху пляшет стружка бонито.', snack: true },
+          { name: 'Рамунэ из ведра со льдом', price: 150, msg: 'Ледяная бутылка, шарик звякает о стекло.' },
+        ],
+      },
+      wata: {
+        title: 'わたあめ', sub: 'В гудящем барабане из сахарных ниточек вырастает розовое облако.',
+        items: [
+          { name: 'Сахарная вата в пакете с героем мультика', price: 300, msg: 'Облако на палочке. Пальцы будут липкими до конца вечера.', snack: true },
+          { name: 'Яблоко в карамели', price: 350, msg: 'Хрустящая красная глазурь, а внутри — кислое яблочко.', snack: true },
+        ],
+      },
+      kori: {
+        title: 'かき氷', sub: 'Ручная машинка скрипит и сыплет ледяную стружку горкой.',
+        items: [
+          { name: 'Какигори с клубничным сиропом', price: 250, msg: 'Сладко, холодно, голова чуть-чуть звенит.', snack: true },
+          { name: 'Какигори «мэрон» — дынный', price: 250, msg: 'Ярко-зелёный, как светлячок. Пахнет дыней.', snack: true },
+          { name: 'Какигори «блю гавайи»', price: 250, msg: 'Язык стал синим. Дети у соседнего лотка хохочут.', snack: true },
+        ],
+      },
+      kingyo: {
+        title: '金魚すくい', sub: 'В голубой ванне мелькают золотые рыбки. Сачок «пои» — бумага на пластиковой рамке.',
+        items: [{ name: 'Одна попытка — один бумажный сачок', price: 300, kingyo: true }],
+      },
     };
     const s = SH[kind];
     this.audio.shopChime();
     const refresh = () => this.hud.openShop(s.title, s.sub, s.items, this.money, (it) => {
       if (this.money < it.price) return;
       this.addMoney(-it.price);
-      this.hud.toast(it.msg);
+      if (it.kingyo) this.tryGoldfish();
+      else this.hud.toast(it.msg);
+      if (it.snack) this.audio.eat();
       if (kind === 'store') this.stamp('dagashi');
+      if (SH[kind] && ['tako', 'wata', 'kori', 'kingyo'].includes(kind)) this.stamp('matsuri');
       if (it.sparklers) { this.sparklers += it.sparklers; store.set('sparklers', this.sparklers); }
       if (it.meal) { this.audio.eat(); this.env.time.hour += 0.5; this.stamp('diner'); this.hud.toast('Пока ел, прошло полчаса.'); }
       refresh();
     });
     refresh();
+  }
+  tryGoldfish() {
+    this.kingyoTries = (this.kingyoTries || 0) + 1;
+    const luck = 0.2 + 0.15 * this.kingyoTries;
+    if (Math.random() < luck) {
+      this.kingyoTries = 0;
+      this.hud.toast('Поймал! Хозяин пересаживает рыбку в пакетик с водой и завязывает узелком. Дома её ждёт стеклянная чаша.');
+      this.stamp('kingyo');
+      store.set('kingyo', true);
+      this.home.showGoldfish(true);
+    } else {
+      const fail = ['Бумага намокла и порвалась… Рыбка махнула хвостом и уплыла.', 'Почти! Рыбка выскользнула у самого края.', 'Сачок порвался. Хозяин смеётся: «Ещё разок?»'];
+      this.hud.toast(fail[Math.floor(Math.random() * fail.length)]);
+    }
   }
   onSit(sp) {
     this.env.time.boost = 6;
@@ -390,6 +434,7 @@ class Game {
     if (P.ridden > 5000) this.stamp('ride');
     if (this.weather.rain > 0.6) this.stamp('rain');
     if (h > 4.4 && h < 6.6 && U.uMist.value.x > 0.015) this.stamp('mist');
+    if (W.festival.open && W.festival.near(P.pos)) this.stamp('matsuri');
     store.set('ridden', Math.round(P.ridden));
   }
   timeEvents() {
@@ -408,6 +453,7 @@ class Game {
       for (let k = 0; k < 3; k++) this.audio.templeBell(600, 60, 520, k * 9);
       this.hud.toast('Где-то за холмами звонит храмовый колокол.');
     }
+    if (crossed(18.3)) this.hud.toast('На холме у святилища зажглись бумажные фонарики — начинается летний праздник, нацу-мацури.');
     if (crossed(20) && !this.fireworks.show) {
       this.fireworks.start(150);
       this.hud.toast('Над рекой начинается летний фейерверк — ханаби!');
@@ -427,7 +473,8 @@ class Game {
     const P = this.player, time = this.env.time;
     const playing = this.state === 'play' && !this.modal;
     if (playing) {
-      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : P.mode === 'sit' ? 6 : 1;
+      const fest = this.world.festival;
+      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : fest.open && fest.near(P.pos) ? 0.4 : P.mode === 'sit' ? 6 : 1;
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
@@ -455,6 +502,7 @@ class Game {
       this.weather.update(this.modal ? 0 : dt, time, this.camera.position);
       this.wildlife.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       this.home.update(dt, this.tSec, time, this.camera.position);
+      this.world.festival.update(this.modal ? 0 : dt, this.tSec, time, this.player);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);
@@ -478,6 +526,8 @@ class Game {
     const fwd = this._fwd || (this._fwd = new THREE.Vector3());
     this.camera.getWorldDirection(fwd);
     const tmp = [];
+    const F = W.festival;
+    this.audio.festivalUpdate(F.music, F.center, F.sizzlePos, F.on);
     this.audio.update(dt, {
       hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
       cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: false,

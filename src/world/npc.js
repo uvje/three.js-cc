@@ -17,7 +17,7 @@ function ball(r, color, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(new T
 function cyl(r0, r1, h, color, seg = 8) { const g = new THREE.CylinderGeometry(r1, r0, h, seg); g.translate(0, h / 2, 0); const m = new THREE.Mesh(g, M(color)); m.castShadow = true; return m; }
 
 // A person rig. All limbs hang along -y from their joint groups.
-function person(o) {
+export function person(o) {
   const s = o.scale || 1;
   const root = new THREE.Group();
   const body = new THREE.Group(); body.scale.setScalar(s); root.add(body);
@@ -52,7 +52,7 @@ function person(o) {
   root.userData = { body, pelvis, spine, neck, shL, elL, shR, elR, hipL, knL, hipR, knR, s };
   return root;
 }
-function pose(p, name, t = 0) {
+export function pose(p, name, t = 0) {
   const u = p.userData;
   const set = (o, x = 0, y = 0, z = 0) => o.rotation.set(x, y, z);
   if (name === 'sit') {

@@ -16,6 +16,7 @@ export const U = {
   uMoonI: { value: 0 },
   uLamps: { value: 0 },
   uWet: { value: 0 },
+  uFest: { value: 0 }, // glow of the shrine festival lights
 };
 
 const FOG_PARS = /* glsl */`

@@ -263,11 +263,11 @@ export function buildLightPools(W, T) {
   g.setIndex(idx);
   g.computeBoundingSphere();
   const mat = new THREE.ShaderMaterial({
-    uniforms: { map: { value: T.pool }, uLamps: U.uLamps, uNight: U.uNight },
+    uniforms: { map: { value: T.pool }, uLamps: U.uLamps, uNight: U.uNight, uFest: U.uFest },
     vertexShader: `attribute float k; varying vec2 vUv; varying vec3 vCol; varying float vK; varying float vDist;
       void main() { vUv = uv; vCol = color; vK = k; vec4 wp = modelMatrix * vec4(position, 1.0); vDist = distance(wp.xyz, cameraPosition); gl_Position = projectionMatrix * viewMatrix * wp; }`,
-    fragmentShader: `uniform sampler2D map; uniform float uLamps, uNight; varying vec2 vUv; varying vec3 vCol; varying float vK; varying float vDist;
-      void main() { float a = texture2D(map, vUv).a; float on = vK > 0.95 ? uLamps : uNight * vK; gl_FragColor = vec4(vCol * a * on * 0.22 * exp(-vDist * 0.004), 1.0); }`,
+    fragmentShader: `uniform sampler2D map; uniform float uLamps, uNight, uFest; varying vec2 vUv; varying vec3 vCol; varying float vK; varying float vDist;
+      void main() { float a = texture2D(map, vUv).a; float on = vK < 0.0 ? uFest * -vK : vK > 0.95 ? uLamps : uNight * vK; gl_FragColor = vec4(vCol * a * on * 0.22 * exp(-vDist * 0.004), 1.0); }`,
     vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
     polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
   });

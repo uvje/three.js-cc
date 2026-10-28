@@ -7,6 +7,14 @@ const band = (h, a, b, r = 0.5) => ss(a - r, a + r, h) * (1 - ss(b - r, b + r, h
 
 // original pentatonic evening melody for the village loudspeaker (C D E G A)
 const N = { C4: 261.63, D4: 293.66, E4: 329.63, G4: 392.0, A4: 440.0, C5: 523.25, D5: 587.33 };
+// festival flute (shinobue) tune in the min'yo scale, in eighth notes; 8 bars, then the drums play on alone
+const FUE_N = { D5: 587.33, F5: 698.46, G5: 783.99, A5: 880.0, C6: 1046.5, D6: 1174.66, F6: 1396.91 };
+const FUE = [
+  ['A5', 2], ['C6', 1], ['D6', 1], ['C6', 2], ['A5', 2], ['G5', 1], ['A5', 1], ['G5', 1], ['F5', 1], ['D5', 4],
+  ['F5', 2], ['G5', 1], ['A5', 1], ['C6', 2], ['D6', 1], ['C6', 1], ['A5', 3], ['G5', 1], ['A5', 4],
+  ['D6', 2], ['F6', 1], ['D6', 1], ['C6', 2], ['D6', 2], ['C6', 1], ['A5', 1], ['G5', 2], ['A5', 4],
+  ['G5', 2], ['F5', 1], ['G5', 1], ['A5', 2], ['C6', 1], ['A5', 1], ['G5', 2], ['F5', 2], ['D5', 4],
+];
 const MELODY = [
   ['E4', 1], ['G4', 1], ['A4', 1], ['G4', 1], ['E4', 1], ['D4', 1], ['C4', 2],
   ['D4', 1], ['E4', 1], ['G4', 1], ['E4', 1], ['D4', 4],
@@ -694,6 +702,98 @@ export class AudioEngine {
   sparklerStop() { this.spark = 0; }
 
   // village loudspeaker melody at 17:00
+  // ---------------------------------------------------------------- summer festival: taiko, kane, shinobue, crowd
+  festivalUpdate(music, pos, sizzlePos, on) {
+    if (!this.ready || (!this.fest && on < 0.01)) return;
+    const c = this.ctx, now = c.currentTime;
+    const F = this.fest || this.buildFestival(pos, sizzlePos);
+    F.out.gain.setTargetAtTime(music * 0.55, now, 0.6);
+    F.crowd.gain.setTargetAtTime(on * 0.5, now, 0.8);
+    F.sizzle.gain.setTargetAtTime(on * 0.05, now, 0.8);
+    // from far away only the big drum carries
+    const cam = this.lastCam;
+    if (cam) F.lp.frequency.setTargetAtTime(Math.max(500, 9000 - Math.hypot(cam.x - pos.x, cam.z - pos.z) * 26), now, 0.3);
+    // schedule ahead by more than the gap between frames, so slow frames don't leave holes in the music
+    const look = Math.min(2, Math.max(0.3, 1.6 * (now - (F.lastCall ?? now))));
+    F.lastCall = now;
+    if (music < 0.02) { F.next = now + 0.2; F.step = 0; return; }
+    if (F.next < now) F.next = now + 0.05;
+    while (F.next < now + look) { this.festStep(F, F.next); F.next += F.dt; F.step++; }
+  }
+  buildFestival(pos, sp) {
+    const c = this.ctx;
+    const F = (this.fest = { dt: 60 / 108 / 4, step: 0, next: c.currentTime + 0.3, fue: new Map() });
+    let e = 0;
+    for (const [n, d] of FUE) { F.fue.set(e, [FUE_N[n], d]); e += d; }
+    F.out = this.gain(0); F.lp = this.filt('lowpass', 8000, 0.5);
+    const p = this.panner(pos.x, pos.y, pos.z, 24, 0.85);
+    F.out.connect(F.lp).connect(p).connect(this.ambOut);
+    const rs = this.gain(0.45); p.connect(rs).connect(this.revIn);
+    // murmur of a crowd: formant-filtered noise with syllable-rate wobble
+    F.crowd = this.gain(0);
+    const cp = this.panner(pos.x, pos.y - 1, pos.z, 9, 1.1);
+    F.crowd.connect(cp).connect(this.ambOut);
+    for (let i = 0; i < 6; i++) {
+      const f1 = this.filt('bandpass', 380 + i * 90, 5), f2 = this.filt('bandpass', 1100 + i * 230, 6), am = this.gain(0), mix = this.gain(0.5);
+      this.loop(this.white, f1, 0.9 + i * 0.03).connect(f2);
+      f1.connect(am); f2.connect(mix).connect(am); am.connect(F.crowd);
+      const l1 = this.osc('sine', 2.6 + i * 0.73), g1 = this.gain(0.5); l1.connect(g1).connect(am.gain); l1.start();
+      const l2 = this.osc('sine', 0.11 + i * 0.05), g2 = this.gain(0.4); l2.connect(g2).connect(am.gain); l2.start();
+    }
+    // the takoyaki griddle
+    F.sizzle = this.gain(0);
+    const sp2 = this.panner(sp.x, sp.y, sp.z, 2.5, 1.6);
+    const hp = this.filt('highpass', 3800, 0.7), crackle = this.gain(0.6);
+    this.loop(this.white, hp);
+    hp.connect(crackle).connect(F.sizzle).connect(sp2).connect(this.ambOut);
+    const cl = this.osc('square', 11.3), cg = this.gain(0.35); cl.connect(cg).connect(crackle.gain); cl.start();
+    return F;
+  }
+  festStep(F, t) {
+    const st = F.step % 16, bar = Math.floor(F.step / 16) % 10, B = F.out;
+    const fill = bar === 9;
+    const DON = fill ? [0, 2, 4, 6, 8, 9, 10, 11, 12] : bar % 2 ? [0, 4, 8, 10, 12, 14] : [0, 6, 8, 12];
+    const KA = fill ? [14] : bar % 2 ? [2, 6] : [3, 10, 14];
+    if (DON.includes(st)) this.taiko(t, st === 0 ? 1 : 0.72 + Math.random() * 0.1, B);
+    if (KA.includes(st)) { this.burst(t, 2400, 3, 0.05, 0.16, B); this.metal(t, [[1580, 0.05, 0.04]], B); }
+    if (st % 2 === 0) this.shime(t, st % 8 === 4 ? 0.2 : 0.08, B);
+    const K = { 0: 0.3, 2: 0.07, 3: 0.08, 4: 0.2, 6: 0.07, 8: 0.26, 10: 0.07, 11: 0.08, 12: 0.2, 14: 0.07 }[st];
+    if (K) { const open = K > 0.1; this.metal(t, [[2380, K * 0.32, open ? 0.24 : 0.05], [3510, K * 0.2, open ? 0.14 : 0.04], [5230, K * 0.12, 0.07]], B); }
+    if (bar < 8 && st % 2 === 0) {
+      const n = F.fue.get(bar * 8 + st / 2);
+      if (n) this.fue(t, n[0], n[1] * F.dt * 2 * 0.96, B);
+    }
+  }
+  taiko(t, a, dest) {
+    this.thump(t, 118, 50, 0.95, 0.55 * a, dest);
+    this.thump(t, 185, 92, 0.2, 0.2 * a, dest);
+    const s = this.ctx.createBufferSource(); s.buffer = this.brown;
+    const lp = this.filt('lowpass', 420), g = this.gain(0);
+    s.connect(lp).connect(g).connect(dest);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5 * a, t + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    s.start(t, Math.random() * 3); s.stop(t + 0.15);
+  }
+  shime(t, a, dest) { this.thump(t, 430, 310, 0.09, a, dest); this.burst(t, 1600, 1.4, 0.045, a * 0.45, dest); }
+  fue(t, f, dur, dest) {
+    const c = this.ctx;
+    const o = this.osc('triangle', f), o2 = this.osc('sine', f * 2), g = this.gain(0), g2 = this.gain(0.1);
+    const lp = this.filt('lowpass', f * 2.6, 0.6);
+    o.connect(g); o2.connect(g2).connect(g); g.connect(lp).connect(dest);
+    // a quick slide up into each note, then vibrato that grows on long notes
+    o.frequency.setValueAtTime(f * 0.94, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+    o2.frequency.setValueAtTime(f * 1.88, t); o2.frequency.exponentialRampToValueAtTime(f * 2, t + 0.05);
+    const v = this.osc('sine', 5.4), vg = this.gain(0); v.connect(vg); vg.connect(o.frequency); vg.connect(o2.frequency);
+    vg.gain.setValueAtTime(0, t + 0.1); vg.gain.linearRampToValueAtTime(f * 0.011, t + Math.max(0.15, dur * 0.8));
+    const A = 0.13;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(A, t + 0.035); g.gain.setValueAtTime(A, t + dur - 0.07); g.gain.linearRampToValueAtTime(0, t + dur);
+    // breath
+    const n = c.createBufferSource(); n.buffer = this.white;
+    const nb = this.filt('bandpass', f * 1.5, 1.2), ng = this.gain(0);
+    n.connect(nb).connect(ng).connect(dest);
+    ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.05, t + 0.02); ng.gain.linearRampToValueAtTime(0.012, t + 0.12); ng.gain.setValueAtTime(0.012, t + dur - 0.07); ng.gain.linearRampToValueAtTime(0, t + dur);
+    for (const s of [o, o2, v]) { s.start(t); s.stop(t + dur + 0.05); }
+    n.start(t, Math.random() * 3); n.stop(t + dur + 0.05);
+  }
   chime(x, y, z) {
     if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.1;

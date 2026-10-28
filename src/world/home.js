@@ -62,6 +62,19 @@ export class Home {
     this.smokePts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xd8d8d8, size: 0.035, transparent: true, opacity: 0.35, depthWrite: false }));
     this.smokePts.frustumCulled = false;
     W.scene.add(this.smokePts);
+    // a goldfish bowl, empty until you win a fish at the festival
+    const bowl = (this.bowl = new THREE.Group());
+    const glass = new THREE.Mesh(new THREE.SphereGeometry(0.14, 18, 12, 0, Math.PI * 2, 0.62, Math.PI - 0.62), new THREE.MeshLambertMaterial({ color: 0xd8f0f4, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }));
+    glass.position.y = 0.12; bowl.add(glass);
+    const water = new THREE.Mesh(new THREE.SphereGeometry(0.128, 16, 10, 0, Math.PI * 2, 0.95, Math.PI - 0.95), new THREE.MeshLambertMaterial({ color: 0x8ac8e0, transparent: true, opacity: 0.35, depthWrite: false }));
+    water.position.y = 0.12; bowl.add(water);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.083, 0.008, 6, 20), new THREE.MeshLambertMaterial({ color: 0x9adaf0, transparent: true, opacity: 0.6 }));
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.12 + Math.cos(0.62) * 0.14; bowl.add(rim);
+    const fish = (this.fish = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.016, 0.05), new THREE.MeshLambertMaterial({ color: 0xff5a1a, emissive: 0x401000 })));
+    fish.position.y = 0.1; bowl.add(fish);
+    L.mesh(bowl, ex - 0.45, top, ez - 0.05);
+    bowl.traverse((o) => { o.castShadow = false; });
+    bowl.visible = false;
     // interactions
     const step = H.ew / Math.max(2, Math.floor(H.ew / 1.75));
     const sx = L.wx(ex + step / 2, ez + 0.32), sz = L.wz(ex + step / 2, ez + 0.32);
@@ -73,7 +86,9 @@ export class Home {
     W.plan.regions.unshift({ jp: 'おばあちゃんの家', ru: 'Бабушкин дом', x: lot.x, z: lot.z, r: 18, seal: '家' });
     this.homePos = { x: L.wx(gx, gz + 2.5), z: L.wz(gx, gz + 2.5) };
   }
+  showGoldfish(v) { this.bowl.visible = v; }
   update(dt, tSec, time, cam) {
+    if (this.bowl.visible) { const a = tSec * 0.9; this.fish.position.set(Math.cos(a) * 0.06, 0.09 + Math.sin(tSec * 1.3) * 0.015, Math.sin(a) * 0.06); this.fish.rotation.y = -a + Math.sin(tSec * 8) * 0.3; }
     if (Math.abs(cam.x - this.lot.x) > 90 || Math.abs(cam.z - this.lot.z) > 90) { this.smokePts.visible = false; return; }
     this.smokePts.visible = true;
     const b = this.smokeBase, n = this.smokeT.length;
