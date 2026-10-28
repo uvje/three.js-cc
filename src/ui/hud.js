@@ -31,6 +31,7 @@ export const STAMPS = [
   { id: 'senko', seal: '線', ru: 'Зажечь сэнко-ханаби тёплой ночью' },
   { id: 'matsuri', seal: '祭', ru: 'Побывать на летнем празднике у святилища' },
   { id: 'kingyo', seal: '魚', ru: 'Поймать золотую рыбку сачком из бумаги' },
+  { id: 'meteor', seal: '星', ru: 'Увидеть падающую звезду' },
 ];
 
 export class HUD {

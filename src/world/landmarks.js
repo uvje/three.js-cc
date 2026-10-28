@@ -103,6 +103,7 @@ function shrine(W, S, rng) {
   P.tube(0, 0.95, 0, 0, rise + 0.95, S.run, 0.035, 5, C(0xa0a4a8));
   W.col.addPlatform(L.wx(0, S.run / 2), L.wz(0, S.run / 2), 1.62, S.run / 2, S.ang, S.bottomH, S.topH, 'stone', 'stairs');
   W.col.addBox(L.wx(0, -0.6), L.wz(0, -0.6), 1.6, 0.4, S.ang, CF.BIKE, 'stairs');
+  W.col.addBox(L.wx(0, S.run + 0.5), L.wz(0, S.run + 0.5), 1.6, 0.4, S.ang, CF.BIKE, 'stairs');
   // terrace
   const T = at(W, S.top[0], S.top[1], S.topH, S.ang);
   torii(T.at(0, 0, 2.5), 0x9a968c, 3.8, 4.0, true);

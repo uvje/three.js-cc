@@ -19,6 +19,7 @@ import { Villagers } from './world/npc.js';
 import { Traffic } from './world/traffic.js';
 import { Weather } from './env/weather.js';
 import { Wildlife } from './world/wildlife.js';
+import { TouchControls } from './ui/touch.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -56,6 +57,7 @@ class Game {
     this.canvas = $('c');
     this.hud = new HUD();
     this.input = new Input(this.canvas);
+    this.touch = new TouchControls(this.input, this.canvas);
     this.audio = new AudioEngine();
     this.audio.settings.vol = this.settings.vol; this.audio.settings.amb = this.settings.amb;
     this.initRenderer();
@@ -124,6 +126,7 @@ class Game {
     this.traffic = new Traffic(this.world, this.audio);
     this.weather = new Weather(this.scene, this.audio);
     this.env.weather = this.weather;
+    this.env.sky.onMeteor = () => { if (this.state === 'play' && !this.modal) this.stamp('meteor'); };
     this.wildlife = new Wildlife(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
@@ -239,6 +242,7 @@ class Game {
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
     else if (it.kind === 'stall') this.openModal('shop', it.stall);
+    else if (it.kind === 'closed') this.hud.toast('Двери заперты, внутри темно. Магазин откроется в 6:30.');
     else if (it.kind === 'melon') {
       this.audio.eat();
       this.hud.toast(['Сочно и холодно. Косточки — в сад, кто дальше.', 'Арбуз из колодца, ледяной. Бабушка посолила кончик — так слаще.'][Math.floor(Math.random() * 2)]);
@@ -269,7 +273,7 @@ class Game {
   openShop(kind) {
     const SH = {
       store: {
-        title: 'なつめ商店', sub: 'Бабушка за прилавком кивает и включает вентилятор. Пахнет сладостями и старым деревом.',
+        title: 'なつめ商店', sub: 'Дедушка откладывает газету и кивает. Под потолком лениво крутится вентилятор, по телевизору — школьный бейсбол.',
         items: [
           { name: 'Рамунэ — газировка со стеклянным шариком', price: 100, msg: 'Щёлк! Шарик проваливается в горлышко. Шипит и пахнет лимонадом.' },
           { name: 'Фруктовый лёд на палочке', price: 80, msg: 'Тает быстрее, чем успеваешь доесть.' },
@@ -454,6 +458,7 @@ class Game {
       this.hud.toast('Где-то за холмами звонит храмовый колокол.');
     }
     if (crossed(18.3)) this.hud.toast('На холме у святилища зажглись бумажные фонарики — начинается летний праздник, нацу-мацури.');
+    if (crossed(22.2) && this.weather.cloud < 0.3) this.hud.toast('Этой ночью пик Персеид. Если долго смотреть в небо, можно поймать падающую звезду.');
     if (crossed(20) && !this.fireworks.show) {
       this.fireworks.start(150);
       this.hud.toast('Над рекой начинается летний фейерверк — ханаби!');
@@ -528,9 +533,11 @@ class Game {
     const tmp = [];
     const F = W.festival;
     this.audio.festivalUpdate(F.music, F.center, F.sizzlePos, F.on);
+    const st = W.store;
+    if (st) this.audio.tvUpdate(Math.hypot(cam.x - st.tvPos.x, cam.z - st.tvPos.z) < 25 ? st.light : 0, st.tvPos);
     this.audio.update(dt, {
       hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
-      cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: false,
+      cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: !!W.store?.inside(cam),
       river: W.nearestRiver(cam.x, cam.z), hum: W.nearestHum(cam.x, cam.z),
       bike: { riding: P.mode === 'bike', speed: P.bike.speed, pedaling: P.bike.pedaling, braking: P.bike.braking, surface: P.surface },
       findTree: (r, rmin = 0) => { const a = W.forest.treesNear(cam.x, cam.z, r, tmp).filter((t) => (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2 > rmin * rmin); return a.length ? a[Math.floor(Math.random() * a.length)] : null; },

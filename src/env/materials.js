@@ -110,6 +110,7 @@ export function makeMaterials(T) {
     winA: win(T.windowDay, T.windowLit),
     winB: win(T.windowDay, T.windowLit),
     winC: win(T.windowDay, T.windowLit),
+    winT: win(T.windowDay, T.windowLit),
     winDark: L({ map: T.windowDay }),
     shojiDark: L({ map: T.shojiDay }),
     doorDark: L({ map: T.doorDay }),
@@ -132,6 +133,7 @@ export function makeMaterials(T) {
   };
   // emissive night groups: windows lit in different hours
   M.windowGroups = { A: [M.winA, M.shojiA, M.doorA], B: [M.winB, M.shojiB, M.doorB], C: [M.winC] };
+  M.winT.emissive.setHex(0x9ab4ff);
   return M;
 }
 

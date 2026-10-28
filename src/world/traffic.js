@@ -75,8 +75,19 @@ export class Traffic {
         mesh.add(h, t);
       }
       mesh.rotation.order = 'YXZ';
+      if (i === 1) {
+        // the tofu seller: a cool box on the bed and a sign on the roof
+        const box = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.9), new THREE.MeshLambertMaterial({ color: 0x5a7aa8 }));
+        box.position.set(0, 0.85, -0.7); mesh.add(box);
+        const st = drawSign('とうふ', { w: 256, h: 96, bg: '#ffffff', fg: '#1a3a8a', font: JP_SANS, weight: 900 });
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.06), [0, 0, 0, 0, 1, 1].map((k) => (k ? new THREE.MeshLambertMaterial({ map: st }) : new THREE.MeshLambertMaterial({ color: 0xf0f0f0 }))));
+        sign.position.set(0, 2.06, 0.95); mesh.add(sign);
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), new THREE.MeshLambertMaterial({ color: 0x9a9a9a }));
+        pole.position.set(0, 1.9, 0.95); mesh.add(pole);
+        mesh.userData.tofu = true;
+      }
       W.scene.add(mesh);
-      const v = { kind, mesh, sp, s: (L * (i + 0.5)) / defs.length, dir: i % 2 ? -1 : 1, v: sp.v, target: sp.v, wait: 0, honk: 0, box: W.col.addDynamicBox(), light: { x: 0, y: 0, z: 0, color: 0xfff0d0, power: 0, lamp: false }, voice: null, stopT: 0 };
+      const v = { tofu: i === 1, hornT: 0, kind, mesh, sp, s: (L * (i + 0.5)) / defs.length, dir: i % 2 ? -1 : 1, v: sp.v, target: sp.v, wait: 0, honk: 0, box: W.col.addDynamicBox(), light: { x: 0, y: 0, z: 0, color: 0xfff0d0, power: 0, lamp: false }, voice: null, stopT: 0 };
       W.lightPool.sources.push(v.light);
       return v;
     });
@@ -99,6 +110,12 @@ export class Traffic {
       const vil = Math.abs(q.x + 40) < 220;
       let target = v.sp.v * (vil ? 0.75 : 1);
       // bus stops
+      // before supper the tofu seller crawls through the village blowing his horn
+      if (v.tofu && h > 16.4 && h < 18.3) {
+        target = Math.min(target, vil ? 4.5 : 9);
+        v.hornT -= dt;
+        if (v.hornT <= 0 && vil) { v.hornT = 7 + this.rng.float(0, 4); this.audio.tofuHorn?.(this.posOf(v)); }
+      }
       if (v.kind === 'bus') {
         for (const st of this.stops) {
           const d = (st - v.s) * v.dir;

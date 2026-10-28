@@ -58,7 +58,7 @@ export class Player {
       this.updateBike(dt, time);
     } else if (this.mode === 'sit') {
       this.yaw -= mdx * sens; this.pitch = clamp(this.pitch - mdy * sens * inv, -1.2, 1.2);
-      if (inp.hit('KeyW') || inp.hit('KeyS') || inp.hit('KeyE') || inp.hit('Space')) this.standUp();
+      if (inp.hit('KeyW') || inp.hit('KeyS') || inp.hit('KeyE') || inp.hit('Space') || Math.abs(inp.joyY) > 0.6) this.standUp();
       this.eye.set(this.sit.x, this.sit.y + 1.18, this.sit.z);
     } else {
       this.yaw -= mdx * sens; this.pitch = clamp(this.pitch - mdy * sens * inv, -1.45, 1.45);
@@ -85,11 +85,12 @@ export class Player {
     if (inp.down('KeyS') || inp.down('ArrowDown')) f -= 1;
     if (inp.down('KeyD') || inp.down('ArrowRight')) s += 1;
     if (inp.down('KeyA') || inp.down('ArrowLeft')) s -= 1;
+    f -= inp.joyY; s += inp.joyX;
     const run = inp.down('ShiftLeft') || inp.down('ShiftRight');
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     let dx = -sy * f + cy * s, dz = -cy * f - sy * s;
     const dl = Math.hypot(dx, dz);
-    if (dl > 0) { dx /= dl; dz /= dl; }
+    if (dl > 1) { dx /= dl; dz /= dl; }
     const surf = this.surface;
     const slow = surf === 'paddy' ? 0.45 : surf === 'water' ? 0.35 : surf === 'tall' ? 0.8 : 1;
     const sp = (run ? 4.4 : 2.0) * slow;
@@ -141,9 +142,10 @@ export class Player {
 
   updateBike(dt, time) {
     const b = this.bike, inp = this.input;
-    const fwd = inp.down('KeyW') || inp.down('ArrowUp');
-    const back = inp.down('KeyS') || inp.down('ArrowDown') || inp.down('Space');
+    const fwd = inp.down('KeyW') || inp.down('ArrowUp') || inp.joyY < -0.35;
+    const back = inp.down('KeyS') || inp.down('ArrowDown') || inp.down('Space') || inp.joyY > 0.45;
     let steerIn = ((inp.down('KeyA') || inp.down('ArrowLeft')) ? 1 : 0) - ((inp.down('KeyD') || inp.down('ArrowRight')) ? 1 : 0);
+    if (Math.abs(inp.joyX) > 0.08) steerIn = clamp(-inp.joyX * 1.2, -1, 1);
     const sprint = inp.down('ShiftLeft') || inp.down('ShiftRight');
     if (this.S.mouseSteer && steerIn === 0) steerIn = clamp(this.headYaw * 1.4, -1, 1);
     const g = this.W.groundAt(b.x, b.z, b.y + 0.3);

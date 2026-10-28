@@ -117,7 +117,7 @@ export class LightPool {
     const lamps = U.uLamps.value, night = time.night, fest = U.uFest.value;
     const cand = [];
     for (const s of this.sources) {
-      if (s.festival && fest < 0.01) continue;
+      if ((s.festival && fest < 0.01) || (s.kf && s.kf() < 0.01)) continue;
       const d = (s.x - cam.x) ** 2 + (s.z - cam.z) ** 2;
       if (d < 70 * 70) cand.push([d, s]);
     }
@@ -129,7 +129,7 @@ export class LightPool {
       const s = c[1];
       l.position.set(s.x, s.y, s.z);
       l.color.setHex(s.color);
-      const k = s.lamp ? lamps : s.festival ? fest : night;
+      const k = s.lamp ? lamps : s.festival ? fest : s.kf ? s.kf() : night;
       const fade = 1 - Math.min(1, Math.max(0, (Math.sqrt(c[0]) - 45) / 25));
       l.intensity = (s.i ?? (s.lamp ? 7 : 2.2)) * s.power * k * fade;
       l.distance = s.dist ?? (s.lamp ? 15 : 6);

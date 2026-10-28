@@ -1,4 +1,5 @@
-// Keyboard + mouse with pointer lock, and a drag-to-look fallback where pointer lock is refused.
+// Keyboard + mouse with pointer lock, and a drag-to-look fallback where pointer lock is refused. Touch input is fed in
+// by ui/touch.js.
 
 export class Input {
   constructor(canvas) {
@@ -42,15 +43,8 @@ export class Input {
     window.addEventListener('mouseup', () => { this.dragging = false; });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // basic touch look for tablets
-    let tl = null;
-    canvas.addEventListener('touchstart', (e) => { if (e.touches.length) tl = [e.touches[0].clientX, e.touches[0].clientY]; }, { passive: true });
-    canvas.addEventListener('touchmove', (e) => {
-      if (!tl || !e.touches.length) return;
-      const t = e.touches[0];
-      this.mouseDX += (t.clientX - tl[0]) * 1.5; this.mouseDY += (t.clientY - tl[1]) * 1.5;
-      tl = [t.clientX, t.clientY];
-    }, { passive: true });
+    // analog stick from the touch controls (ui/touch.js), -1..1
+    this.joyX = 0; this.joyY = 0;
   }
   _move(e) {
     if (!this.enabled) return;
@@ -74,5 +68,5 @@ export class Input {
   hit(code) { return this.pressed.has(code); }
   consumeMouse() { const r = [this.mouseDX, this.mouseDY]; this.mouseDX = 0; this.mouseDY = 0; return r; }
   endFrame() { this.pressed.clear(); this.clicked = false; }
-  clear() { this.keys.clear(); this.pressed.clear(); this.mouseDX = this.mouseDY = 0; }
+  clear() { this.keys.clear(); this.pressed.clear(); this.mouseDX = this.mouseDY = 0; this.joyX = this.joyY = 0; }
 }

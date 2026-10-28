@@ -5,6 +5,7 @@ import * as MD from './models.js';
 import { drawSign, canvas, tex, JP_SERIF, JP_SANS } from '../env/textures.js';
 import { patch } from '../env/materials.js';
 import { CF } from './collision.js';
+import { StoreInterior } from './store.js';
 
 // Houses (farmhouses with kura storehouses, Showa-era two-storey homes, small tin-roofed cottages) and the village shops.
 
@@ -51,7 +52,10 @@ export class LotCtx {
 function pickWin(rng) { return rng.weighted([['A', 0.5], ['B', 0.24], ['C', 0.12], [null, 0.14]]); }
 const wkey = (kind, g) => (g ? kind + (kind === 'win' ? g : g === 'C' ? 'A' : g) : kind + 'Dark');
 
+const tvRng = new RNG(77);
 function win(H, key, face, ext, u, y, w, h, frameCol) {
+  // here and there a window flickers blue with someone's evening TV
+  if ((key === 'winA' || key === 'winB') && tvRng.chance(0.07)) key = 'winT';
   const b = H(key); b.rotateY(FACE[face]);
   const z = ext + 0.035;
   b.quad([u - w / 2, y, z], [u + w / 2, y, z], [u + w / 2, y + h, z], [u - w / 2, y + h, z], WHITE, [0, 0, 1, 1]);
@@ -391,12 +395,30 @@ function shopHouse(L, rng, o) {
   const hw = sw / 2, hd = sd / 2;
   const wallC = o.wallC || varyColor(rng.pick([0xd8d0bc, 0xcfc8b4, 0xe2dccc]), rng, 0.03);
   const frame = C(0xb8bcbe);
-  H('plain').box(0, 0, 0, sw + 0.1, 0.18, sd + 0.1, C(0x9a968e));
-  H(o.wallKey || 'siding').box(0, 0.18, 0, sw, o.storeys === 1 ? 3.3 : 5.8, sd, wallC, { noTop: true });
-  // storefront glass
   const gw = sw * 0.72;
-  const n = 4;
-  for (let i = 0; i < n; i++) win(H, 'doorA', 'f', hd, -gw / 2 + (i + 0.5) * (gw / n), 0.18, gw / n - 0.04, 2.3, null);
+  if (o.interior) {
+    // a shop you can walk into: concrete floor, walls as panels around an open storefront
+    H('concrete').box(0, 0, 0, sw + 0.1, 0.18, sd + 0.1, C(0xb4b0a8));
+    const t = 0.14, wh = 2.67, side = hw - gw / 2, Wl = H(o.wallKey || 'siding');
+    Wl.box(-hw + t / 2, 0.18, 0, t, wh, sd, wallC);
+    Wl.box(hw - t / 2, 0.18, 0, t, wh, sd, wallC);
+    Wl.box(0, 0.18, -hd + t / 2, sw - 2 * t, wh, t, wallC);
+    for (const sx of [-1, 1]) Wl.box(sx * (hw - side / 2), 0.18, hd - t / 2, side, wh, t, wallC);
+    Wl.box(0, 2.48, hd - t / 2, gw, wh - 2.3, t, wallC);
+    H(o.wallKey || 'siding').box(0, 2.85, 0, sw, (o.storeys === 1 ? 3.48 : 5.98) - 2.85, sd, wallC, { noTop: true });
+    L.box(-hw + t / 2, hz, t / 2 + 0.04, hd);
+    L.box(hw - t / 2, hz, t / 2 + 0.04, hd);
+    L.box(0, hz - hd + t / 2, hw, t / 2 + 0.04);
+    for (const sx of [-1, 1]) L.box(sx * (hw - (hw - o.interior.door / 2) / 2), hz + hd - t / 2, (hw - o.interior.door / 2) / 2, t / 2 + 0.04);
+    L.box(0, hz + hd, o.interior.door / 2, 0.12, 0, CF.BIKE);
+    L.W.col.addPlatform(L.wx(0, hz), L.wz(0, hz), hw, hd, L.lot.ang, L.lot.h + 0.18, L.lot.h + 0.18, 'concrete');
+  } else {
+    H('plain').box(0, 0, 0, sw + 0.1, 0.18, sd + 0.1, C(0x9a968e));
+    H(o.wallKey || 'siding').box(0, 0.18, 0, sw, o.storeys === 1 ? 3.3 : 5.8, sd, wallC, { noTop: true });
+    // storefront glass
+    const n = 4;
+    for (let i = 0; i < n; i++) win(H, 'doorA', 'f', hd, -gw / 2 + (i + 0.5) * (gw / n), 0.18, gw / n - 0.04, 2.3, null);
+  }
   H('plain').box(0, 2.48, hd + 0.02, gw + 0.2, 0.12, 0.12, frame);
   if (o.storeys !== 1) {
     win(H, wkey('win', L.lot.win || 'A'), 'f', hd, -hw / 2, 3.9, 1.6, 1.1, frame);
@@ -408,13 +430,14 @@ function shopHouse(L, rng, o) {
   H(o.wallKey || 'siding').box(0, o.storeys === 1 ? 3.48 : 5.98, hd - 0.1, sw + 0.2, topY - (o.storeys === 1 ? 3.48 : 5.98), 0.25, wallC);
   const R = H(o.roofKey || 'tin'); R.translate(0, o.storeys === 1 ? 3.48 : 5.98, 0);
   R.gableRoof(sw, sd, 0, 0.35, 0.35, o.roofC || C(0x6a6e74), { thickness: 0.12, gableColor: wallC });
-  L.box(0, hz, hw + 0.1, hd + 0.1, 0, CF.ALL, 'shop');
-  return { sw, sd, hz, fz, hw, hd, topY };
+  if (!o.interior) L.box(0, hz, hw + 0.1, hd + 0.1, 0, CF.ALL, 'shop');
+  return { sw, sd, hz, fz, hw, hd, topY, gw, wallC };
 }
 
 const SHOPS = {
   store(L, rng) {
-    const s = shopHouse(L, rng, { wallC: C(0xd6ccb4), roofC: C(0x5a3a2e) });
+    const s = shopHouse(L, rng, { wallC: C(0xd6ccb4), roofC: C(0x5a3a2e), interior: { door: 3.6 } });
+    L.W.store = new StoreInterior(L, s, rng);
     awning(L, 0, s.fz, s.sw * 0.82, 1.7, 3.05, awningTex('#2f7a4a', '#f2f0e6'));
     L.sign('なつめ商店', 0, 4.15, s.fz + 0.16, s.sw * 0.78, 0.95, { bg: '#f6f2e6', fg: '#b8282a', border: '#2f5a3a', borderW: 10, glow: 0.5, sub: 'たばこ・おかし・アイス' });
     L.sign('たばこ', -s.hw + 0.32, 2.6, s.fz + 0.4, 0.42, 1.25, { vertical: true, bg: '#d42c24', fg: '#ffffff', tw: 128, th: 384, glow: 0.8 }, 0);
@@ -431,7 +454,7 @@ const SHOPS = {
     const G = L.get('plain', -s.hw + 2.9, 0, s.fz + 0.4);
     for (let i = 0; i < 3; i++) { G.box(i * 0.45, 0, 0, 0.42, 0.9, 0.4, C([0xe84a3a, 0x3a8ae8, 0xf0c030][i])); G.blob(i * 0.45, 1.15, 0, 0.18, 0.22, 0.18, C(0xe8f4ff), null, 0, 1, 1); }
     L.box(-s.hw + 3.35, s.fz + 0.4, 0.7, 0.25);
-    L.W.interact.push({ x: L.wx(0, s.fz + 0.8), z: L.wz(0, s.fz + 0.8), y: L.lot.h, r: 2.2, kind: 'shop', shop: 'store', label: 'Зайти в «Нацумэ сётэн»' });
+    L.W.interact.push({ x: L.wx(0, s.fz + 0.8), z: L.wz(0, s.fz + 0.8), y: L.lot.h, r: 2.2, kind: 'closed', label: 'Магазин закрыт — откроется в 6:30', when: () => !L.W.store.open });
     L.W.shopSpots.store = { x: L.wx(0, s.fz + 0.8), z: L.wz(0, s.fz + 0.8) };
   },
   liquor(L, rng) {

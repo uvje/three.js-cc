@@ -252,6 +252,9 @@ export class AudioEngine {
     const sch = (key, rate, fn) => { if (!this.next[key]) this.next[key] = t + rnd(1, 5); if (t > this.next[key]) { this.next[key] = t + rate * rnd(0.5, 1.5); fn(); } };
     if (minmin > 0.05) sch('minmin', 9 / minmin, () => { const tr = env.findTree(45); if (tr) this.minmin(tr.x, tr.y + rnd(3, 7), tr.z); });
     if (higu > 0.05) sch('higu', 5.5 / higu, () => { const tr = env.findTree(90, 20); if (tr) this.higurashi(tr.x, tr.y + rnd(4, 9), tr.z); });
+    const kuma = band(h, 5.8, 10.6, 0.6) * dry, tsuku = band(h, 12.5, 17.4, 0.8) * dry;
+    if (kuma > 0.1) sch('kuma', 9 / kuma, () => { const tr = env.findTree(40); if (tr) this.kumazemi(tr.x, tr.y + rnd(3, 7), tr.z); });
+    if (tsuku > 0.1) sch('tsuku', 24 / tsuku, () => { const tr = env.findTree(60, 8); if (tr) this.tsukutsuku(tr.x, tr.y + rnd(3, 8), tr.z); });
     if (abura > 0.1) sch('abura', 7 / abura, () => { const tr = env.findTree(30); if (tr) this.aburazemi(tr.x, tr.y + rnd(2, 6), tr.z); });
     const morning = band(h, 4.9, 9.5, 0.4), dusk = band(h, 16.6, 19.0, 0.4), day = band(h, 6, 18, 1);
     if (morning > 0.1 || day > 0.5) sch('sparrow', 6 / Math.max(morning, day * 0.25), () => { const p = env.findHouse(40); if (p) this.sparrow(p.x, p.y + rnd(3, 6), p.z); });
@@ -348,7 +351,7 @@ export class AudioEngine {
   aburazemi(x, y, z) {
     const c = this.ctx, t0 = c.currentTime + 0.05, dur = rnd(4, 9);
     const out = this.spot(x, y, z, { ref: 6, rev: 0.15 });
-    const src = c.createBufferSource(); src.buffer = this.white; src.playbackRate.value = rnd(0.9, 1.1);
+    const src = c.createBufferSource(); src.buffer = this.white; src.loop = true; src.playbackRate.value = rnd(0.9, 1.1);
     const bp = this.filt('bandpass', rnd(4000, 5200), 1.6);
     const am = this.gain(0.4); const lfo = this.osc('sawtooth', rnd(60, 90)); const lg = this.gain(0.6); lfo.connect(lg).connect(am.gain);
     const env = this.gain(0);
@@ -356,6 +359,61 @@ export class AudioEngine {
     const A = rnd(0.7, 1.1), g = env.gain;
     g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A, t0 + 1.2); g.setValueAtTime(A, t0 + dur); g.linearRampToValueAtTime(0, t0 + dur + 1.5);
     src.start(t0, rnd(0, 2)); lfo.start(t0); src.stop(t0 + dur + 1.6); lfo.stop(t0 + dur + 1.6);
+  }
+  // kumazemi: the big black cicada of summer mornings, a loud pulsing "shaa-shaa-shaa"
+  kumazemi(x, y, z) {
+    const c = this.ctx, t0 = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 7, rev: 0.2 });
+    const src = c.createBufferSource(); src.buffer = this.white; src.loop = true; src.playbackRate.value = rnd(0.92, 1.08);
+    const bp = this.filt('bandpass', rnd(4300, 5300), 1.3), pk = this.filt('peaking', 3200, 1.5); pk.gain.value = 5;
+    const am = this.gain(0.5); const lfo = this.osc('sawtooth', rnd(110, 140)); const lg = this.gain(0.5); lfo.connect(lg).connect(am.gain);
+    const env = this.gain(0);
+    src.connect(bp).connect(pk).connect(am).connect(env).connect(out);
+    const n = Math.floor(rnd(10, 22)), A = rnd(0.5, 0.85), g = env.gain;
+    let ts = t0, per = rnd(0.34, 0.42);
+    g.setValueAtTime(0, t0);
+    for (let i = 0; i < n; i++) {
+      const k = Math.min(1, (i + 2) / 5) * (1 - Math.max(0, (i - n + 4) / 5));
+      g.setValueAtTime(A * 0.06 * k, ts); g.linearRampToValueAtTime(A * k, ts + 0.035); g.linearRampToValueAtTime(A * 0.65 * k, ts + per * 0.55); g.linearRampToValueAtTime(A * 0.06 * k, ts + per * 0.95);
+      ts += per; per *= 0.995;
+    }
+    g.linearRampToValueAtTime(0, ts + 0.3);
+    src.start(t0, rnd(0, 2)); lfo.start(t0); src.stop(ts + 0.4); lfo.stop(ts + 0.4);
+  }
+  // tsukutsukuboshi: "jiii... o-shii tsuku-tsuku, o-shii tsuku-tsuku... ui-oosu, ui-oosu... jiii"
+  tsukutsuku(x, y, z) {
+    const c = this.ctx, t0 = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 7, rev: 0.3 });
+    const o = this.osc('sawtooth', 390);
+    const hp = this.filt('highpass', 3600, 0.8), f1 = this.filt('bandpass', 5200, 3), f2 = this.filt('bandpass', 7400, 2.2);
+    const am = this.gain(0.5); const lfo = this.osc('sine', rnd(150, 175)); const lg = this.gain(0.5); lfo.connect(lg).connect(am.gain);
+    const env = this.gain(0);
+    o.connect(hp); hp.connect(f1).connect(am); hp.connect(f2).connect(am); am.connect(env).connect(out);
+    const A = rnd(0.5, 0.8), g = env.gain, F = f1.frequency;
+    g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A * 0.55, t0 + 0.8);
+    let ts = t0 + 1.4;
+    const n = Math.floor(rnd(9, 17));
+    let per = 0.44;
+    for (let i = 0; i < n; i++) {
+      // o-shii
+      F.setValueAtTime(4500, ts); F.linearRampToValueAtTime(5700, ts + 0.12);
+      g.setValueAtTime(A * 0.3, ts); g.linearRampToValueAtTime(A * 0.95, ts + 0.05); g.linearRampToValueAtTime(A * 0.7, ts + 0.13);
+      // tsu-ku
+      for (const off of [0.15, 0.25]) {
+        F.setValueAtTime(5400, ts + off); F.linearRampToValueAtTime(6000, ts + off + 0.03);
+        g.linearRampToValueAtTime(A * 0.12, ts + off); g.linearRampToValueAtTime(A, ts + off + 0.02); g.linearRampToValueAtTime(A * 0.25, ts + off + 0.07);
+      }
+      g.linearRampToValueAtTime(A * 0.18, ts + per * 0.95);
+      ts += per; per = Math.max(0.36, per * 0.988);
+    }
+    for (let i = 0; i < 4; i++) {
+      // ui-oosu
+      F.setValueAtTime(4800, ts); F.linearRampToValueAtTime(6300, ts + 0.18); F.linearRampToValueAtTime(4700, ts + 0.5);
+      g.setValueAtTime(A * 0.2, ts); g.linearRampToValueAtTime(A * 0.85, ts + 0.15); g.linearRampToValueAtTime(A * 0.3, ts + 0.52);
+      ts += 0.56;
+    }
+    g.linearRampToValueAtTime(A * 0.5, ts + 0.3); g.linearRampToValueAtTime(0, ts + 1.6);
+    o.start(t0); lfo.start(t0); o.stop(ts + 1.7); lfo.stop(ts + 1.7);
   }
   higurashi(x, y, z) {
     const c = this.ctx, t0 = c.currentTime + 0.05;
@@ -402,7 +460,7 @@ export class AudioEngine {
       const o = this.osc('sawtooth', rnd(480, 560));
       const f1 = this.filt('bandpass', 1150, 1.6), f2 = this.filt('bandpass', 2400, 2.5);
       const g = this.gain(0);
-      const ns = c.createBufferSource(); ns.buffer = this.white; const nf = this.filt('bandpass', 1500, 1.2); const ng = this.gain(0.35);
+      const ns = c.createBufferSource(); ns.buffer = this.white; ns.loop = true; const nf = this.filt('bandpass', 1500, 1.2); const ng = this.gain(0.35);
       o.connect(f1).connect(g); o.connect(f2).connect(g); ns.connect(nf).connect(ng).connect(g); g.connect(out);
       const d = rnd(0.3, 0.42);
       o.frequency.setValueAtTime(o.frequency.value, t); o.frequency.linearRampToValueAtTime(o.frequency.value * 0.86, t + d);
@@ -480,7 +538,7 @@ export class AudioEngine {
   }
   click() { if (!this.ready) return; this.metal(this.ctx.currentTime, [[3200, 0.04, 0.05]], this.sfx); }
   burst(t, f, q, dur, amp, dest = this.sfx, type = 'bandpass') {
-    const s = this.ctx.createBufferSource(); s.buffer = this.white;
+    const s = this.ctx.createBufferSource(); s.buffer = this.white; s.loop = true;
     const fl = this.filt(type, f, q), g = this.gain(0);
     s.connect(fl).connect(g).connect(dest);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -585,7 +643,7 @@ export class AudioEngine {
   purr(x, y, z) {
     if (!this.ready) return;
     const out = this.spot(x, y, z, { ref: 1.5, roll: 1.4 });
-    const t = this.ctx.currentTime, s = this.ctx.createBufferSource(); s.buffer = this.brown;
+    const t = this.ctx.currentTime, s = this.ctx.createBufferSource(); s.buffer = this.brown; s.loop = true;
     const lp = this.filt('lowpass', 160, 1), am = this.gain(0.4), lfo = this.osc('sine', 24), lg = this.gain(0.6), g = this.gain(0);
     lfo.connect(lg).connect(am.gain); s.connect(lp).connect(am).connect(g).connect(out);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.3); g.gain.setValueAtTime(0.5, t + 2.4); g.gain.linearRampToValueAtTime(0, t + 3);
@@ -607,7 +665,7 @@ export class AudioEngine {
     if (!this.ready) return;
     const c = this.ctx, t = c.currentTime + dist / 343;
     const close = dist < 1200;
-    const s = c.createBufferSource(); s.buffer = this.brown;
+    const s = c.createBufferSource(); s.buffer = this.brown; s.loop = true;
     const lp = this.filt('lowpass', close ? 380 : 180, 0.7), g = this.gain(0);
     s.connect(lp).connect(g).connect(this.ambOut); const rs = this.gain(0.8); g.connect(rs).connect(this.revIn);
     const A = Math.min(1.4, 1300 / dist);
@@ -648,6 +706,27 @@ export class AudioEngine {
     V.lfo.frequency.setTargetAtTime((bus ? 18 : 26) + v.v * 2, t, 0.3);
     V.g.gain.setTargetAtTime((0.06 + v.v * 0.01) * (bus ? 1.5 : 1), t, 0.25);
     V.tg.gain.setTargetAtTime(v.v * 0.03, t, 0.25);
+  }
+  // the tofu seller's brass horn: a short low "puu", then a long "paa" that sags at the end
+  tofuHorn(p) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + 0.05;
+    const out = this.spot(p.x, p.y + 1.6, p.z, { ref: 14, roll: 0.8, rev: 0.45 });
+    const o = this.osc('sawtooth', 560), o2 = this.osc('square', 560);
+    const bp = this.filt('bandpass', 1250, 1.1), lp = this.filt('lowpass', 3000, 0.7), g = this.gain(0), g2 = this.gain(0.22);
+    o.connect(bp); o2.connect(g2).connect(bp); bp.connect(lp).connect(g).connect(out);
+    for (let rep = 0; rep < 2; rep++) {
+      const t0 = t + rep * 2.1, f1 = 560, f2 = 630;
+      for (const os of [o, o2]) {
+        os.frequency.setValueAtTime(f1 * 0.96, t0); os.frequency.linearRampToValueAtTime(f1, t0 + 0.06);
+        os.frequency.setValueAtTime(f2 * 0.97, t0 + 0.44); os.frequency.linearRampToValueAtTime(f2, t0 + 0.52);
+        os.frequency.setValueAtTime(f2, t0 + 1.3); os.frequency.linearRampToValueAtTime(f2 * 0.92, t0 + 1.62);
+      }
+      const G = g.gain;
+      G.setValueAtTime(0, t0); G.linearRampToValueAtTime(0.3, t0 + 0.05); G.setValueAtTime(0.28, t0 + 0.36); G.linearRampToValueAtTime(0.04, t0 + 0.42);
+      G.linearRampToValueAtTime(0.34, t0 + 0.49); G.setValueAtTime(0.32, t0 + 1.35); G.linearRampToValueAtTime(0, t0 + 1.64);
+    }
+    for (const os of [o, o2]) { os.start(t); os.stop(t + 3.9); }
   }
   horn(pos, kind) {
     if (!this.ready) return;
@@ -702,6 +781,41 @@ export class AudioEngine {
   sparklerStop() { this.spark = 0; }
 
   // village loudspeaker melody at 17:00
+  // ---------------------------------------------------------------- the shop's little TV: koshien baseball
+  tvUpdate(level, pos) {
+    if (!this.ready || (!this.tv && level < 0.01)) return;
+    const c = this.ctx, now = c.currentTime;
+    if (!this.tv) {
+      const T = (this.tv = { out: this.gain(0), next: now + 3 });
+      const p = this.panner(pos.x, pos.y, pos.z, 1.2, 1.5);
+      const hp = this.filt('highpass', 320, 0.7), lp = this.filt('lowpass', 3600, 0.7);
+      T.out.connect(hp).connect(lp).connect(p).connect(this.sfx);
+      // stadium crowd and brass band wash
+      T.crowd = this.gain(0.12);
+      const cb = this.filt('bandpass', 900, 0.7);
+      this.loop(this.pink, cb); cb.connect(T.crowd).connect(T.out);
+      const sw = this.osc('sine', 0.07), sg = this.gain(0.05); sw.connect(sg).connect(T.crowd.gain); sw.start();
+      // the announcer: formant noise in syllables, switched on and off in phrases
+      T.voice = this.gain(0);
+      const am = this.gain(0), f1 = this.filt('bandpass', 650, 4), f2 = this.filt('bandpass', 1700, 5), mix = this.gain(0.6);
+      this.loop(this.white, f1, 1.02).connect(f2);
+      f1.connect(am); f2.connect(mix).connect(am); am.connect(T.voice).connect(T.out);
+      const l1 = this.osc('sine', 4.6), g1 = this.gain(0.6); l1.connect(g1).connect(am.gain); l1.start();
+      const l2 = this.osc('sine', 2.3), g2 = this.gain(0.3); l2.connect(g2).connect(am.gain); l2.start();
+    }
+    const T = this.tv;
+    T.out.gain.setTargetAtTime(level * 0.5, now, 0.4);
+    if (level < 0.01 || now < T.next) return;
+    // a phrase of commentary, now and then the crack of a bat and a cheer
+    const t = now + 0.05, dur = rnd(1.2, 3.2);
+    T.voice.gain.setTargetAtTime(0.9, t, 0.05); T.voice.gain.setTargetAtTime(0, t + dur, 0.08);
+    if (Math.random() < 0.18) {
+      const tb = t + dur + 0.4;
+      this.metal(tb, [[1900, 0.25, 0.05], [3100, 0.12, 0.04]], T.out);
+      T.crowd.gain.setTargetAtTime(0.5, tb + 0.1, 0.25); T.crowd.gain.setTargetAtTime(0.12, tb + 2.5, 1.2);
+      T.next = tb + rnd(4, 7);
+    } else T.next = t + dur + rnd(0.4, 1.6);
+  }
   // ---------------------------------------------------------------- summer festival: taiko, kane, shinobue, crowd
   festivalUpdate(music, pos, sizzlePos, on) {
     if (!this.ready || (!this.fest && on < 0.01)) return;
@@ -767,7 +881,7 @@ export class AudioEngine {
   taiko(t, a, dest) {
     this.thump(t, 118, 50, 0.95, 0.55 * a, dest);
     this.thump(t, 185, 92, 0.2, 0.2 * a, dest);
-    const s = this.ctx.createBufferSource(); s.buffer = this.brown;
+    const s = this.ctx.createBufferSource(); s.buffer = this.brown; s.loop = true;
     const lp = this.filt('lowpass', 420), g = this.gain(0);
     s.connect(lp).connect(g).connect(dest);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5 * a, t + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
@@ -787,7 +901,7 @@ export class AudioEngine {
     const A = 0.13;
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(A, t + 0.035); g.gain.setValueAtTime(A, t + dur - 0.07); g.gain.linearRampToValueAtTime(0, t + dur);
     // breath
-    const n = c.createBufferSource(); n.buffer = this.white;
+    const n = c.createBufferSource(); n.buffer = this.white; n.loop = true;
     const nb = this.filt('bandpass', f * 1.5, 1.2), ng = this.gain(0);
     n.connect(nb).connect(ng).connect(dest);
     ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(0.05, t + 0.02); ng.gain.linearRampToValueAtTime(0.012, t + 0.12); ng.gain.setValueAtTime(0.012, t + dur - 0.07); ng.gain.linearRampToValueAtTime(0, t + dur);
@@ -829,7 +943,7 @@ export class AudioEngine {
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * 0.5, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
       o.start(t); o.stop(t + d + 0.1);
     }
-    const s = c.createBufferSource(); s.buffer = this.brown; const g = this.gain(0); s.connect(g).connect(out);
+    const s = c.createBufferSource(); s.buffer = this.brown; s.loop = true; const g = this.gain(0); s.connect(g).connect(out);
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
     s.start(t); s.stop(t + 0.5);
   }

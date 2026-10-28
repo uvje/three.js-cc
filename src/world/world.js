@@ -23,7 +23,7 @@ const SURF = {
   [G.WATER]: 'water', [G.BALLAST]: 'gravel', [G.STONE]: 'stone', [G.SAND]: 'dirt', [G.CONCRETE]: 'concrete', [G.DIRT]: 'dirt',
   [G.FIELD]: 'dirt', [G.TALL]: 'tall', [G.WOOD]: 'wood',
 };
-const NO_SHADOW = ['paddy', 'roadMain', 'roadLocal', 'gravel', 'dirt', 'lampGlow', 'vend0', 'vend1', 'vend2', 'winA', 'winB', 'winC', 'winDark', 'shojiA', 'shojiB', 'shojiDark', 'doorA', 'doorB', 'doorDark'];
+const NO_SHADOW = ['paddy', 'roadMain', 'roadLocal', 'gravel', 'dirt', 'lampGlow', 'vend0', 'vend1', 'vend2', 'winA', 'winB', 'winC', 'winT', 'winDark', 'shojiA', 'shojiB', 'shojiDark', 'doorA', 'doorB', 'doorDark'];
 
 export class World {
   constructor(scene, renderer, quality) {
@@ -100,11 +100,16 @@ export class World {
     this.fireflies.update(time, pr, hgt);
     this.moths.update(pr, hgt);
     this.lightPool.update(cam, time);
+    this.store?.update(dt, tSec, time, cam);
     const M = this.M;
     for (const m of M.windowGroups.A) m.emissiveIntensity = time.winA * (m === M.doorA ? 0.7 : 0.95);
     for (const m of M.windowGroups.B) m.emissiveIntensity = time.winB * (m === M.doorB ? 0.7 : 0.95);
     for (const m of M.windowGroups.C) m.emissiveIntensity = time.winC * 0.95;
-    const vend = 0.55 + 0.75 * time.night;
+    // TV glow: a new shot every couple of seconds, with a fast shimmer on top
+    this.tvT = (this.tvT || 0) - dt;
+    if (this.tvT <= 0) { this.tvT = 0.6 + Math.random() * 2.8; this.tvB = 0.35 + Math.random() * 0.65; }
+    M.winT.emissiveIntensity = time.winA * (this.tvB || 0.6) * (0.85 + 0.15 * Math.sin(tSec * 23) * Math.sin(tSec * 7.7));
+    const vend = 0.55 + 0.4 * time.night;
     M.vend0.emissiveIntensity = vend; M.vend1.emissiveIntensity = vend; M.vend2.emissiveIntensity = vend;
     M.lampGlow.color.setScalar(1 + 3 * time.lamps);
     for (const s of this.glowSigns) s.mat.emissiveIntensity = s.k * time.lamps;

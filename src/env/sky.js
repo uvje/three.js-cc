@@ -15,7 +15,8 @@ void main() {
 }`;
 const SKY_FRAG = /* glsl */`
 uniform vec3 uSunDir, uMoonDir, uZenith, uHorizon, uGround, uSunGlow, uSunDisc, uCloudLit, uCloudDark;
-uniform float uStars, uTime, uCloudCover, uMoonLight, uBright;
+uniform float uStars, uTime, uCloudCover, uMoonLight, uBright, uMetT, uMetI;
+uniform vec3 uMetA, uMetB;
 varying vec3 vDir;
 float hash13(vec3 p3) { p3 = fract(p3 * 0.1031); p3 += dot(p3, p3.zyx + 31.32); return fract((p3.x + p3.y) * p3.z); }
 vec3 hash33(vec3 p3) { p3 = fract(p3 * vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yxz + 33.33); return fract((p3.xxy + p3.yxx) * p3.zyx); }
@@ -46,10 +47,22 @@ void main() {
       vec3 sc = mix(vec3(1.0, 0.85, 0.7), vec3(0.8, 0.88, 1.0), hash13(cell + 7.0));
       col += sc * smoothstep(0.13, 0.0, dd) * (0.35 + mag * mag * 2.2) * tw * uStars * smoothstep(0.02, 0.2, h);
     }
-    float mw = dot(d, normalize(vec3(0.42, 0.5, -0.76)));
+    vec3 mwN = normalize(vec3(0.42, 0.5, -0.76));
+    float mw = dot(d, mwN);
     float band = exp(-mw * mw * 26.0);
-    float mwn = fbm(vec2(atan(d.z, d.x) * 4.0, d.y * 5.0 + mw * 4.0));
+    // noise in the plane of the galaxy, so there is no seam where an angle would wrap around
+    vec3 e1 = normalize(cross(mwN, vec3(0.0, 1.0, 0.0))), e2 = cross(mwN, e1);
+    float mwn = fbm(vec2(dot(d, e1), dot(d, e2)) * 4.0 + mw * 4.0);
     col += vec3(0.5, 0.56, 0.78) * band * smoothstep(0.35, 0.8, mwn) * 0.22 * uStars * smoothstep(0.05, 0.4, h);
+    // a Perseid: the head runs from A to B along a great circle, the tail fades out behind it
+    if (uMetT >= 0.0) {
+      vec3 mh = normalize(mix(uMetA, uMetB, uMetT));
+      vec3 mt = normalize(mix(uMetA, uMetB, max(0.0, uMetT - 0.4)));
+      vec3 ab = mh - mt;
+      float k = clamp(dot(d - mt, ab) / max(dot(ab, ab), 1e-7), 0.0, 1.0);
+      float dist = length(d - (mt + ab * k));
+      col += vec3(0.85, 0.92, 1.0) * exp(-dist * dist / 2.2e-6) * k * k * sin(3.14159 * uMetT) * uMetI * uStars;
+    }
   }
   float md = dot(d, uMoonDir);
   float moon = smoothstep(0.99972, 0.99984, md);
@@ -136,7 +149,9 @@ export class Sky {
       uSunGlow: { value: new THREE.Color() }, uSunDisc: { value: new THREE.Color() },
       uCloudLit: { value: new THREE.Color() }, uCloudDark: { value: new THREE.Color() },
       uStars: { value: 0 }, uTime: { value: 0 }, uCloudCover: { value: 0.42 }, uMoonLight: { value: 1 }, uBright: { value: 1.25 },
+      uMetT: { value: -1 }, uMetI: { value: 0 }, uMetA: { value: new THREE.Vector3() }, uMetB: { value: new THREE.Vector3() },
     };
+    this.meteor = { t: -1, dur: 1, next: 20 };
     const mat = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false });
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(100, 48, 24), mat);
     this.dome.renderOrder = -100;
@@ -194,6 +209,7 @@ export class Sky {
       u.uStars.value *= 1 - cloud;
     }
     u.uBright.value = 1.25 + flash * 1.2;
+    this.updateMeteor(camera, tSec, u.uStars.value);
     for (const c of this.clouds) {
       c.u.uLit.value.copy(s.cl).multiplyScalar(1.05);
       c.u.uDark.value.copy(s.cd).lerp(s.hor, 0.25);
@@ -206,4 +222,32 @@ export class Sky {
     }
   }
 }
+Sky.prototype.updateMeteor = function (camera, tSec, stars) {
+  const m = this.meteor, u = this.uniforms;
+  const dt = Math.min(0.1, Math.max(0, tSec - (this._lastT ?? tSec)));
+  this._lastT = tSec;
+  if (m.t >= 0) {
+    m.t += dt / m.dur;
+    if (m.t >= 1) { m.t = -1; u.uMetT.value = -1; return; }
+    u.uMetT.value = m.t;
+    return;
+  }
+  m.next -= dt;
+  if (m.next > 0 || stars < 0.6) return;
+  m.next = 18 + Math.random() * 50;
+  // streaks radiate away from Perseus, low in the north-east
+  const az = Math.random() * Math.PI * 2, el = 0.6 + Math.random() * 0.6;
+  const a = u.uMetA.value.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
+  const rad = new THREE.Vector3(0.55, 0.35, -0.75).normalize();
+  const dir = a.clone().sub(rad).normalize();
+  const len = 0.18 + Math.random() * 0.3;
+  u.uMetB.value.copy(a).addScaledVector(dir, len).normalize();
+  u.uMetI.value = 2.5 + Math.random() * 4;
+  m.dur = 0.45 + Math.random() * 0.7;
+  m.t = 0;
+  // did the player see it?
+  const f = camera.getWorldDirection(this._f || (this._f = new THREE.Vector3()));
+  const mid = a.clone().add(u.uMetB.value).normalize();
+  if (f.dot(mid) > 0.8) this.onMeteor?.();
+};
 function smooth01(x) { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); }
