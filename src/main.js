@@ -116,6 +116,7 @@ class Game {
     this.world.game = this;
     await this.world.generate(progress);
     this.home = this.world.home;
+    this.world.taiso.audio = this.audio;
     this.home.showGoldfish(!!store.get('kingyo', false));
     this.hud.buildMap(this.world);
     this.trains = new Trains(this.world, this.audio);
@@ -374,7 +375,7 @@ class Game {
       P.trans = 1;
       this.state = 'play';
       fade.classList.remove('on');
-      this.hud.toast('Доброе утро! Пахнет мисо-супом и мокрой от росы травой.');
+      this.hud.toast('Доброе утро! Пахнет мисо-супом и мокрой от росы травой. Дети уже бегут к школе на утреннюю радиозарядку.');
       this.stamp('sleep');
     }, 1800);
   }
@@ -497,7 +498,8 @@ class Game {
     if (playing) {
       this.watchPerformance(raw);
       const fest = this.world.festival;
-      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : fest.open && fest.near(P.pos) ? 0.4 : P.mode === 'sit' ? 6 : 1;
+      const ts = this.world.taiso;
+      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : ts.state === 'playing' && ts.near(P.pos) ? 0.15 : fest.open && fest.near(P.pos) ? 0.4 : P.mode === 'sit' ? 6 : 1;
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
@@ -526,6 +528,7 @@ class Game {
       this.wildlife.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       this.home.update(dt, this.tSec, time, this.camera.position);
       this.world.festival.update(this.modal ? 0 : dt, this.tSec, time, this.player);
+      this.world.taiso.update(this.modal ? 0 : dt, this.tSec, time, this.player);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

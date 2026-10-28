@@ -15,6 +15,7 @@ import { GrassSystem } from './grass.js';
 import { Fireflies, Moths, LightPool } from './fx.js';
 import { Festival } from './festival.js';
 import { Home } from './home.js';
+import { RadioTaiso } from './taiso.js';
 
 // Builds the whole village and answers spatial queries (ground height, surfaces) for the player and the soundscape.
 
@@ -62,6 +63,7 @@ export class World {
     buildGuardrails(this);
     this.festival = new Festival(this);
     this.home = new Home(this);
+    this.taiso = new RadioTaiso(this);
     for (const l of this.tallGrassLots) this.plan.markRect(l.x, l.z, l.w / 2 - 1, l.d / 2 - 1, l.ang, 0, G.TALL);
     await step(0.64, 'Сажаем траву и рис');
     Object.assign(this, buildGroundTextures(this.hm, this.plan.ground, this.plan.noise));

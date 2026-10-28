@@ -816,6 +816,66 @@ export class AudioEngine {
       T.next = tb + rnd(4, 7);
     } else T.next = t + dur + rnd(0.4, 1.6);
   }
+  // ---------------------------------------------------------------- radio calisthenics: a cassette of bouncy piano
+  // Returns the audio time at which the count-in starts, so the exercises can follow the beat.
+  taiso(pos) {
+    if (!this.ready) return undefined;
+    const c = this.ctx, t0 = c.currentTime + 0.4, beat = 60 / 132;
+    const out = this.spot(pos.x, pos.y, pos.z, { ref: 10, roll: 0.9, rev: 0.3, gain: 0.55 });
+    const hp = this.filt('highpass', 170, 0.7), lp = this.filt('lowpass', 3800, 0.7), pk = this.filt('peaking', 1500, 1); pk.gain.value = 4;
+    const bus = this.gain(1); bus.connect(hp).connect(lp).connect(pk).connect(out);
+    const NOTE = (s) => { const m = /^([A-G])(\d)$/.exec(s); const i = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]]; return 440 * Math.pow(2, ((+m[2] - 4) * 12 + i - 9) / 12); };
+    const ev = [];
+    // whistle, then a staccato count-in
+    ev.push([0, 'whistle']);
+    for (let b = 4; b < 8; b++) for (const n of ['C4', 'E4', 'G4']) ev.push([b, NOTE(n), 0.18, 0.18]);
+    const MEL = [['E5', 2], ['G5', 1], ['E5', 1], ['C5', 2], ['G4', 2], ['A4', 1], ['B4', 1], ['C5', 1], ['D5', 1], ['E5', 4],
+      ['F5', 2], ['A5', 1], ['F5', 1], ['D5', 2], ['B4', 2], ['C5', 1], ['D5', 1], ['E5', 1], ['F5', 1], ['G5', 4],
+      ['A5', 2], ['G5', 1], ['F5', 1], ['E5', 2], ['C5', 2], ['D5', 1], ['E5', 1], ['F5', 1], ['D5', 1], ['G5', 4],
+      ['E5', 2], ['C6', 2], ['B5', 1], ['A5', 1], ['G5', 1], ['F5', 1], ['E5', 2], ['D5', 2], ['C5', 4]];
+    const CH = [['C3', ['C4', 'E4', 'G4']], ['A2', ['A3', 'C4', 'E4']], ['D3', ['D4', 'F4', 'A4']], ['G2', ['G3', 'B3', 'D4']],
+      ['F2', ['F3', 'A3', 'C4']], ['G2', ['G3', 'B3', 'F4']], ['C3', ['C4', 'E4', 'G4']], ['C3', ['C4', 'E4', 'G4']]];
+    for (let rep = 0; rep < 3; rep++) {
+      const b0 = 8 + rep * 32;
+      let e = 0;
+      for (const [n, d] of MEL) { ev.push([b0 + e / 2, NOTE(n) * (rep === 1 ? 2 : 1), d * beat * 0.5 * 0.92, 0.3]); e += d; }
+      CH.forEach(([root, tri], bar) => {
+        const bb = b0 + bar * 4, rf = NOTE(root);
+        ev.push([bb, rf, beat * 0.8, 0.34]); ev.push([bb + 2, rf * 1.5, beat * 0.8, 0.3]);
+        for (const k of [1, 3]) for (const n of tri) ev.push([bb + k, NOTE(n), beat * 0.45, 0.12]);
+      });
+    }
+    for (const n of ['C2', 'C3', 'C4', 'E4', 'G4', 'C5']) ev.push([104, NOTE(n), beat * 3.5, 0.22]);
+    ev.sort((a, b) => a[0] - b[0]);
+    // schedule a little ahead at a time instead of creating every voice at once
+    let k = 0;
+    const pump = () => {
+      const until = c.currentTime + 2.5;
+      while (k < ev.length && t0 + ev[k][0] * beat < until) {
+        const [b, f, dur, vel] = ev[k++], t = t0 + b * beat;
+        if (f === 'whistle') this.whistle(t, bus); else this.piano(t, f, dur, vel, bus);
+      }
+      if (k < ev.length) setTimeout(pump, 400);
+    };
+    pump();
+    return t0;
+  }
+  piano(t, f, dur, vel, dest) {
+    const o1 = this.osc('triangle', f), o2 = this.osc('sine', f * 2), o3 = this.osc('sine', f * 3.01);
+    const g = this.gain(0), g2 = this.gain(0.32), g3 = this.gain(0.1);
+    o1.connect(g); o2.connect(g2).connect(g); o3.connect(g3).connect(g); g.connect(dest);
+    const G = g.gain, end = t + dur + 0.3;
+    G.setValueAtTime(0, t); G.linearRampToValueAtTime(vel, t + 0.004); G.exponentialRampToValueAtTime(vel * 0.35, t + 0.28); G.exponentialRampToValueAtTime(0.0001, end);
+    for (const o of [o1, o2, o3]) { o.start(t); o.stop(end + 0.02); }
+  }
+  whistle(t, dest) {
+    for (const [t1, d] of [[0, 0.16], [0.24, 0.5]]) {
+      const o = this.osc('sine', 2900), g = this.gain(0), tr = this.osc('square', 34), tg = this.gain(120);
+      tr.connect(tg).connect(o.frequency); o.connect(g).connect(dest);
+      g.gain.setValueAtTime(0, t + t1); g.gain.linearRampToValueAtTime(0.16, t + t1 + 0.01); g.gain.setValueAtTime(0.16, t + t1 + d - 0.03); g.gain.linearRampToValueAtTime(0, t + t1 + d);
+      o.start(t + t1); tr.start(t + t1); o.stop(t + t1 + d + 0.02); tr.stop(t + t1 + d + 0.02);
+    }
+  }
   // ---------------------------------------------------------------- summer festival: taiko, kane, shinobue, crowd
   festivalUpdate(music, pos, sizzlePos, on) {
     if (!this.ready || (!this.fest && on < 0.01)) return;
