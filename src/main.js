@@ -1,0 +1,411 @@
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Input } from './core/input.js';
+import { Environment } from './env/environment.js';
+import { U } from './env/materials.js';
+import { DRINKS } from './env/textures.js';
+import { World } from './world/world.js';
+import { F } from './world/planner.js';
+import { Player } from './player/player.js';
+import { AudioEngine } from './audio/audio.js';
+import { HUD, STAMPS } from './ui/hud.js';
+
+const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('natsume:' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('natsume:' + k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } },
+};
+
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 }, uVig: { value: 0.38 }, uNight: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse; uniform float uTime, uVig, uNight; varying vec2 vUv;
+    void main() {
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 d = vUv - 0.5;
+      c.rgb *= 1.0 - dot(d, d) * uVig * 2.2;
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(c.rgb, mix(vec3(l), c.rgb, 0.8) * vec3(0.9, 0.97, 1.1), uNight * 0.55);
+      c.rgb = mix(c.rgb, c.rgb * vec3(1.03, 1.0, 0.95), 1.0 - uNight);
+      float n = fract(sin(dot(vUv * (fract(uTime) * 91.0 + 1.0), vec2(12.9898, 78.233))) * 43758.5453);
+      c.rgb += (n - 0.5) * 0.01 * (0.5 + l);
+      gl_FragColor = c;
+    }`,
+};
+
+class Game {
+  constructor() {
+    this.settings = Object.assign({ sens: 1, vol: 0.8, amb: 1, quality: 'medium', invertY: false, mouseSteer: false, timeIdx: 3 }, store.get('settings', {}));
+    this.stamps = new Set(store.get('stamps', []));
+    this.money = store.get('money', 2000);
+    this.state = 'loading';
+    this.tSec = 0;
+    this.canvas = $('c');
+    this.hud = new HUD();
+    this.input = new Input(this.canvas);
+    this.audio = new AudioEngine();
+    this.audio.settings.vol = this.settings.vol; this.audio.settings.amb = this.settings.amb;
+    this.initRenderer();
+    this.bindUI();
+    this.modal = null;
+    this.lastRegion = null; this.regionCooldown = {};
+    this.prevHour = null;
+  }
+  initRenderer() {
+    const q = this.settings.quality;
+    const r = (this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: q === 'low', powerPreference: 'high-performance' }));
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = 1;
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.08, 6000);
+    this.env = new Environment(this.scene, r, q);
+    this.applyPixelRatio();
+    this.composer = new EffectComposer(r, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
+    this.composer.addPass(new RenderPass(this.env.skyScene, this.camera));
+    const mainPass = new RenderPass(this.scene, this.camera);
+    mainPass.clear = false; mainPass.clearDepth = true;
+    this.composer.addPass(mainPass);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.35, 0.6, 1.0);
+    this.composer.addPass(this.bloom);
+    this.grade = new ShaderPass(GradeShader);
+    this.composer.addPass(this.grade);
+    this.composer.addPass(new OutputPass());
+    this.resize();
+    addEventListener('resize', () => this.resize());
+  }
+  applyPixelRatio() {
+    const q = this.settings.quality, dpr = devicePixelRatio || 1;
+    this.renderer.setPixelRatio(q === 'high' ? Math.min(dpr, 1.75) : q === 'low' ? Math.min(dpr, 1) * 0.85 : Math.min(dpr, 1.25));
+  }
+  resize() {
+    const w = innerWidth, h = innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h); }
+  }
+  setQuality(q) {
+    this.settings.quality = q;
+    this.applyPixelRatio(); this.resize();
+    this.env.setQuality(q);
+    this.world?.setQuality(q);
+  }
+
+  async load() {
+    const bar = $('loadBar'), txt = $('loadText');
+    const progress = (p, label) => { bar.style.width = Math.round(p * 100) + '%'; if (label) txt.textContent = label; };
+    progress(0.01, 'Ждём шрифты');
+    try { await Promise.race([Promise.all(['900 64px "Zen Old Mincho"', '700 32px "M PLUS Rounded 1c"'].map((f) => document.fonts.load(f, 'なつめ商店駅'))), new Promise((r) => setTimeout(r, 2500))]); } catch (e) { /* offline: system fonts */ }
+    this.world = new World(this.scene, this.renderer, this.settings.quality);
+    this.world.game = this;
+    await this.world.generate(progress);
+    this.hud.buildMap(this.world);
+    this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
+    const sp = this.world.shopSpots.store;
+    const road = this.world.plan.byName.main;
+    const q = road.poly.nearest(sp.x, sp.z, 40);
+    const yaw = Math.atan2(-(q.x - sp.x), -(q.z - sp.z)) + 1.2;
+    this.player.spawn(sp.x + (q.x - sp.x) * 0.55, sp.z + (q.z - sp.z) * 0.55, yaw);
+    this.applyTimeSpeed();
+    this.renderer.compile(this.scene, this.camera);
+    progress(1, 'Готово. Лето ждёт.');
+    const b = $('startBtn'); b.disabled = false; b.textContent = 'Поехали'; b.focus();
+    this.state = 'title';
+    window.__game = this;
+  }
+  start() {
+    if (this.state !== 'title' && this.state !== 'paused') return;
+    $('title').hidden = true;
+    this.hud.showHud(true);
+    this.audio.start();
+    this.audio.setVolume(this.settings.vol); this.audio.setAmbience(this.settings.amb);
+    this.input.enabled = true;
+    this.input.requestLock();
+    this.state = 'play';
+    this.hud.setMoney(this.money);
+    this.hud.place({ jp: 'なつめ村', ru: 'Деревня Нацумэ · 15:30, август', seal: '夏' });
+    setTimeout(() => this.hud.toast('W — идти, E — сесть на велосипед. Он стоит справа от тебя.'), 1500);
+    this.canvas.focus();
+  }
+
+  bindUI() {
+    $('startBtn').addEventListener('click', () => this.start());
+    $('resumeBtn').addEventListener('click', () => this.resume());
+    $('shopClose').addEventListener('click', () => this.closeModal());
+    $('diaryClose').addEventListener('click', () => this.closeModal());
+    $('mapView').addEventListener('click', () => this.closeModal());
+    this.input.onUnlock = () => { if (this.state === 'play' && !this.modal && !this.input.lockFailed) this.pause(); };
+    addEventListener('keydown', (e) => {
+      if (this.state === 'title' && (e.code === 'Enter' || e.code === 'Space') && !$('startBtn').disabled) { e.preventDefault(); this.start(); return; }
+      if (e.code === 'Escape') {
+        if (this.modal) this.closeModal();
+        else if (this.state === 'play') this.pause();
+        else if (this.state === 'paused') this.resume();
+      }
+      if (this.state === 'play' || this.modal) {
+        if (e.code === 'KeyM') { e.preventDefault(); this.modal === 'map' ? this.closeModal() : this.openModal('map'); }
+        if (e.code === 'Tab') { e.preventDefault(); this.modal === 'diary' ? this.closeModal() : this.openModal('diary'); }
+      }
+      if (this.state === 'play' && !this.modal) {
+        if (e.code === 'KeyH') document.body.classList.toggle('hide-hud');
+        if (e.code === 'BracketRight') { this.settings.timeIdx = Math.min(SPEEDS.length - 1, this.settings.timeIdx + 1); this.applyTimeSpeed(true); }
+        if (e.code === 'BracketLeft') { this.settings.timeIdx = Math.max(0, this.settings.timeIdx - 1); this.applyTimeSpeed(true); }
+      }
+    });
+    const bindRange = (id, key, fmt, apply) => {
+      const el = $(id), out = $(id + 'Out');
+      el.value = this.settings[key];
+      const upd = () => { this.settings[key] = parseFloat(el.value); out.textContent = fmt(this.settings[key]); apply?.(this.settings[key]); store.set('settings', this.settings); };
+      el.addEventListener('input', upd); upd();
+    };
+    bindRange('setTime', 'timeIdx', (v) => this.speedLabel(v), () => this.applyTimeSpeed());
+    bindRange('setSens', 'sens', (v) => v.toFixed(2));
+    bindRange('setVol', 'vol', (v) => Math.round(v * 100) + '%', (v) => this.audio.setVolume(v));
+    bindRange('setAmb', 'amb', (v) => Math.round(v * 100) + '%', (v) => this.audio.setAmbience(v));
+    const hourEl = $('setHour');
+    hourEl.addEventListener('input', () => { const h = parseFloat(hourEl.value); this.env.time.hour = h; $('setHourOut').textContent = this.env.time.clock(); this.prevHour = h; });
+    const qEl = $('setQuality'); qEl.value = this.settings.quality;
+    qEl.addEventListener('change', () => { this.setQuality(qEl.value); store.set('settings', this.settings); });
+    const inv = $('setInvert'); inv.checked = this.settings.invertY; inv.addEventListener('change', () => { this.settings.invertY = inv.checked; store.set('settings', this.settings); });
+    const ms = $('setMouseSteer'); ms.checked = this.settings.mouseSteer; ms.addEventListener('change', () => { this.settings.mouseSteer = ms.checked; store.set('settings', this.settings); });
+  }
+  speedLabel(i) { const s = SPEEDS[i]; const min = (24 * 3600) / s / 60; return min >= 60 ? `сутки за ${(min / 60).toFixed(1).replace('.0', '')} ч` : `сутки за ${Math.round(min)} мин`; }
+  applyTimeSpeed(toast) { this.env.time.speed = SPEEDS[this.settings.timeIdx]; if (toast) this.hud.toast('Время: ' + this.speedLabel(this.settings.timeIdx)); store.set('settings', this.settings); }
+  pause() {
+    if (this.state !== 'play') return;
+    this.state = 'paused';
+    this.input.exitLock(); this.input.clear();
+    $('pause').hidden = false;
+    $('setHour').value = this.env.time.hour; $('setHourOut').textContent = this.env.time.clock();
+    $('pauseInfo').textContent = `${this.env.time.dateJP()} · ${this.env.time.clock()} · штампов ${this.stamps.size}/${STAMPS.length}`;
+  }
+  resume() {
+    if (this.state !== 'paused') return;
+    $('pause').hidden = true;
+    this.state = 'play';
+    this.input.requestLock();
+    this.canvas.focus();
+  }
+  openModal(kind, data) {
+    this.modal = kind;
+    this.input.exitLock(); this.input.clear();
+    if (kind === 'map') { this.hud.drawMap(this.player); $('mapView').hidden = false; }
+    if (kind === 'diary') { this.hud.renderDiary(this.stamps, { ridden: this.player.ridden, day: this.env.time.day }); $('diaryView').hidden = false; }
+    if (kind === 'shop') this.openShop(data);
+  }
+  closeModal() {
+    $('mapView').hidden = true; $('diaryView').hidden = true; this.hud.closeShop();
+    this.modal = null;
+    this.input.clear();
+    if (this.state === 'play') { this.input.requestLock(); this.canvas.focus(); }
+  }
+
+  // ---------------- interactions
+  interact(it) {
+    const P = this.player;
+    if (it.kind === 'vending') {
+      if (this.money < 130) { this.hud.toast('Не хватает мелочи…'); return; }
+      this.addMoney(-130);
+      this.audio.vending();
+      const d = DRINKS[Math.floor(Math.random() * DRINKS.length)];
+      setTimeout(() => this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`), 1100);
+      this.stamp('vending');
+    } else if (it.kind === 'shop') this.openModal('shop', it.shop);
+    else if (it.kind === 'pray') {
+      if (this.money < 5) { this.hud.toast('Нужна хотя бы монетка в 5 иен'); return; }
+      this.addMoney(-5);
+      this.audio.coinBox();
+      const fortunes = [['大吉', 'Большая удача'], ['中吉', 'Средняя удача'], ['小吉', 'Маленькая удача'], ['吉', 'Удача'], ['末吉', 'Удача придёт позже']];
+      const f = fortunes[Math.floor(Math.random() * fortunes.length)];
+      setTimeout(() => this.hud.toast(`Хлоп-хлоп. Желание загадано. Омикудзи: ${f[0]} — ${f[1]}.`), 2400);
+      this.stamp('shrine');
+    } else if (it.kind === 'timetable') {
+      this.hud.toast('Расписание выгорело на солнце. Кажется, поезд ходит раз в несколько часов.');
+    }
+    void P;
+  }
+  openShop(kind) {
+    const SH = {
+      store: {
+        title: 'なつめ商店', sub: 'Бабушка за прилавком кивает и включает вентилятор. Пахнет сладостями и старым деревом.',
+        items: [
+          { name: 'Рамунэ — газировка со стеклянным шариком', price: 100, msg: 'Щёлк! Шарик проваливается в горлышко. Шипит и пахнет лимонадом.' },
+          { name: 'Фруктовый лёд на палочке', price: 80, msg: 'Тает быстрее, чем успеваешь доесть.' },
+          { name: 'Какигори с клубничным сиропом', price: 200, msg: 'Голова чуть-чуть замёрзла. Это и есть лето.' },
+          { name: 'Горсть дагаси — мелких сладостей', price: 50, msg: 'Жевательная конфета, кислый порошок и крошечное печенье в форме рыбки.' },
+          { name: 'Кукурузная палочка', price: 15, msg: 'Хрустит. Пальцы в сырной пудре.' },
+          { name: 'Набор бенгальских огней', price: 300, msg: 'Бабушка улыбается: «Только вечером, у воды». Огоньки — на следующий раз.' },
+        ],
+      },
+      diner: {
+        title: 'ふじ食堂', sub: 'Под потолком крутится вентилятор, по телевизору — бейсбол старшеклассников.',
+        items: [
+          { name: 'Хиясси тюка — холодная лапша', price: 650, msg: 'Ледяная лапша, огурец и кунжутная заправка. Идеально в жару.', meal: true },
+          { name: 'Сёю-рамэн', price: 550, msg: 'Горячий бульон, хоть и жарко. Хозяйка добавила лишнее яйцо.', meal: true },
+          { name: 'Карри-райс', price: 600, msg: 'Домашнее карри, как в школьной столовой.', meal: true },
+          { name: 'Какигори с зелёным чаем и бобами', price: 280, msg: 'Горьковато-сладко. Тает на языке.' },
+        ],
+      },
+    };
+    const s = SH[kind];
+    this.audio.shopChime();
+    const refresh = () => this.hud.openShop(s.title, s.sub, s.items, this.money, (it) => {
+      if (this.money < it.price) return;
+      this.addMoney(-it.price);
+      this.hud.toast(it.msg);
+      if (kind === 'store') this.stamp('dagashi');
+      if (it.meal) { this.audio.eat(); this.env.time.hour += 0.5; this.stamp('diner'); this.hud.toast('Пока ел, прошло полчаса.'); }
+      refresh();
+    });
+    refresh();
+  }
+  onSit(sp) {
+    this.env.time.boost = 6;
+    this.hud.toast('Время течёт медленно и лениво… Держи T, чтобы оно бежало быстрее.');
+    if (sp.label.includes('поезд')) this.stamp('station');
+    if (sp.busStop) this.stamp('busstop');
+    const h = this.env.time.hour;
+    if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
+  }
+  onStand() { this.env.time.boost = 1; }
+  addMoney(v) { this.money += v; this.hud.setMoney(this.money); store.set('money', this.money); }
+  stamp(id) {
+    if (this.stamps.has(id)) return;
+    this.stamps.add(id);
+    store.set('stamps', [...this.stamps]);
+    const s = STAMPS.find((x) => x.id === id);
+    setTimeout(() => this.hud.toast(`Новый штамп в дневнике: 「${s.seal}」 ${s.ru}`), 600);
+    this.audio.click();
+  }
+
+  // ---------------- per-second checks
+  checks() {
+    const P = this.player, W = this.world, time = this.env.time, h = time.hour;
+    const x = P.pos.x, z = P.pos.z;
+    // place titles
+    let region = null;
+    for (const r of W.plan.regions) {
+      if (r.x !== undefined && Math.hypot(r.x - x, r.z - z) < r.r) { region = r; break; }
+    }
+    const rd = W.plan.riverDist(x, z);
+    if (!region && rd < 22) region = W.plan.regions.find((r) => r.river);
+    if (!region && W.plan.occAt(x, z) & (F.FIELD | F.ROAD) && W.paddies.some((p) => Math.abs(p.x - x) < 40 && Math.abs(p.z - z) < 40)) region = W.plan.regions.find((r) => r.fields);
+    if (region !== this.lastRegion) {
+      this.lastRegion = region;
+      const now = this.tSec;
+      if (region && (this.regionCooldown[region.jp] || -1e9) < now - 90) { this.regionCooldown[region.jp] = now; this.hud.place(region); }
+    }
+    // stamps
+    const A = W.plan.areas;
+    if (Math.hypot(A.camphor.x - x, A.camphor.z - z) < 16) this.stamp('camphor');
+    if (W.sunflowerFields.some((f) => Math.hypot(f.x - x, f.z - z) < 28)) this.stamp('sunflower');
+    if (rd < 16) this.stamp('river');
+    if (Math.abs(x - A.school.x) < A.school.hw && Math.abs(z - A.school.z) < A.school.hd) this.stamp('school');
+    if (Math.hypot(A.lookout.x - x, A.lookout.z - z) < 16 && h > 17.9 && h < 19.4) this.stamp('sunset');
+    if (W.fireflies.u.uOn.value > 0.3 && rd < 30) this.stamp('fireflies');
+    if (P.nightRide > 500) this.stamp('night');
+    if (P.ridden > 5000) this.stamp('ride');
+    if (h > 4.4 && h < 6.6 && U.uMist.value.x > 0.015) this.stamp('mist');
+    store.set('ridden', Math.round(P.ridden));
+  }
+  timeEvents() {
+    const h = this.env.time.hour, ph = this.prevHour;
+    this.prevHour = h;
+    if (ph === null || h < ph) { if (ph !== null && ph > 23) { /* new day */ } return; }
+    const crossed = (x) => ph < x && h >= x;
+    const W = this.world;
+    if (crossed(17)) {
+      const sp = W.speaker;
+      if (sp) this.audio.chime(sp.x, sp.y, sp.z);
+      this.hud.toast('♪ Из громкоговорителя над деревней плывёт вечерняя мелодия: пора домой.');
+      this.stamp('chime');
+    }
+    if (crossed(18) || crossed(6)) {
+      for (let k = 0; k < 3; k++) this.audio.templeBell(600, 60, 520, k * 9);
+      this.hud.toast('Где-то за холмами звонит храмовый колокол.');
+    }
+    if (crossed(7)) { this.addMoney(500); this.hud.toast('Утро. Бабушка оставила на столе 500 иен на карманные расходы.'); }
+  }
+
+  // ---------------- loop
+  frame(now) {
+    const dt = Math.min(0.05, (now - (this.last || now)) / 1000);
+    this.last = now;
+    this.tSec += dt;
+    if (this.state === 'loading') { this.renderer.setClearColor(0x0e1530); this.renderer.clear(); return; }
+    const P = this.player, time = this.env.time;
+    const playing = this.state === 'play' && !this.modal;
+    if (playing) {
+      time.boost = this.input.down('KeyT') ? 40 : P.mode === 'sit' ? 6 : 1;
+      P.update(dt, this.tSec, time);
+      this.hud.prompt(P.prompt);
+      this.hud.speed(P.bike.speed, P.mode === 'bike');
+      this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? 'Мышь — смотреть · T — быстрее время · E — встать' : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
+      this.checkTimer = (this.checkTimer || 0) + dt;
+      if (this.checkTimer > 0.5) { this.checkTimer = 0; this.checks(); }
+      this.timeEvents();
+    } else if (this.state === 'title') {
+      // slow establishing shot behind the title page
+      const sp = this.world.shopSpots.store;
+      const a = this.tSec * 0.04 + 2.4;
+      this.camera.position.set(sp.x + Math.cos(a) * 34, P.pos.y + 11 + Math.sin(this.tSec * 0.1), sp.z + Math.sin(a) * 34);
+      this.camera.lookAt(sp.x, P.pos.y + 3, sp.z);
+    } else if (this.modal === 'map') this.hud.drawMap(P);
+    const envDt = playing || this.state === 'title' ? dt : 0;
+    this.env.update(envDt, this.tSec, this.camera, P.pos);
+    this.world.update(dt, this.tSec, this.camera.position, time);
+    this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
+    if (this.state === 'play') this.updateAudio(dt);
+    // post fx
+    const night = time.night;
+    this.bloom.strength = 0.25 + 0.35 * night;
+    this.bloom.threshold = 1.0 - 0.12 * night;
+    this.grade.uniforms.uTime.value = this.tSec;
+    this.grade.uniforms.uNight.value = night;
+    if (this.settings.quality === 'low') {
+      const r = this.renderer;
+      r.autoClear = false; r.clear(); r.render(this.env.skyScene, this.camera); r.clearDepth(); r.render(this.scene, this.camera);
+    } else { this.renderer.autoClear = true; this.composer.render(); }
+    this.input.endFrame();
+  }
+  updateAudio(dt) {
+    const P = this.player, W = this.world, cam = this.camera.position;
+    this.audioEnvT = (this.audioEnvT || 0) - dt;
+    if (this.audioEnvT <= 0) { this.audioEnvT = 0.5; this.envCache = W.envAt(cam.x, cam.z); }
+    const e = this.envCache;
+    const fwd = this._fwd || (this._fwd = new THREE.Vector3());
+    this.camera.getWorldDirection(fwd);
+    const tmp = [];
+    this.audio.update(dt, {
+      hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night,
+      cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: false,
+      river: W.nearestRiver(cam.x, cam.z), hum: W.nearestHum(cam.x, cam.z),
+      bike: { riding: P.mode === 'bike', speed: P.bike.speed, pedaling: P.bike.pedaling, braking: P.bike.braking, surface: P.surface },
+      findTree: (r, rmin = 0) => { const a = W.forest.treesNear(cam.x, cam.z, r, tmp).filter((t) => (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2 > rmin * rmin); return a.length ? a[Math.floor(Math.random() * a.length)] : null; },
+      findHouse: (r) => { const l = W.plan.lots.filter((l) => Math.abs(l.x - cam.x) < r && Math.abs(l.z - cam.z) < r); return l.length ? { x: l[0].x + (Math.random() - 0.5) * 8, y: l[0].h, z: l[0].z + (Math.random() - 0.5) * 8 } : null; },
+      findFurin: (r) => { const f = W.furin.filter((f) => Math.hypot(f.x - cam.x, f.z - cam.z) < r); return f.length ? f[Math.floor(Math.random() * f.length)] : null; },
+      findPaddy: (r) => { const p = W.paddies.filter((p) => Math.hypot(p.x - cam.x, p.z - cam.z) < r); if (!p.length) return null; const q = p[Math.floor(Math.random() * p.length)]; return { x: q.x + (Math.random() - 0.5) * q.hw * 2, y: q.y, z: q.z + (Math.random() - 0.5) * q.hd * 2 }; },
+      findGrass: (rmin, rmax) => {
+        for (let k = 0; k < 6; k++) {
+          const a = Math.random() * Math.PI * 2, d = rmin + Math.random() * (rmax - rmin);
+          const x = cam.x + Math.cos(a) * d, z = cam.z + Math.sin(a) * d;
+          const ix = Math.round((x + 1000) / 2), iz = Math.round((z + 1000) / 2);
+          if (W.maskData[(iz * W.maskW + ix) * 4] > 90) return { x, y: W.hm.sample(x, z), z };
+        }
+        return null;
+      },
+    });
+  }
+}
+
+const game = new Game();
+const loop = (t) => { requestAnimationFrame(loop); try { game.frame(t); } catch (e) { console.error(e); } };
+requestAnimationFrame(loop);
+game.load().catch((e) => { console.error(e); $('loadText').textContent = 'Ошибка загрузки: ' + e.message; });

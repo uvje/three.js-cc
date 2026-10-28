@@ -1,0 +1,554 @@
+// Procedural soundscape. Every sound is synthesised with WebAudio at runtime — the game ships no audio files.
+
+const rnd = (a = 0, b = 1) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const band = (h, a, b, r = 0.5) => ss(a - r, a + r, h) * (1 - ss(b - r, b + r, h));
+
+// original pentatonic evening melody for the village loudspeaker (C D E G A)
+const N = { C4: 261.63, D4: 293.66, E4: 329.63, G4: 392.0, A4: 440.0, C5: 523.25, D5: 587.33 };
+const MELODY = [
+  ['E4', 1], ['G4', 1], ['A4', 1], ['G4', 1], ['E4', 1], ['D4', 1], ['C4', 2],
+  ['D4', 1], ['E4', 1], ['G4', 1], ['E4', 1], ['D4', 4],
+  ['E4', 1], ['G4', 1], ['A4', 1], ['C5', 1], ['A4', 1], ['G4', 1], ['E4', 2],
+  ['D4', 1], ['E4', 1], ['D4', 1], ['C4', 1], ['C4', 4],
+];
+
+export class AudioEngine {
+  constructor() { this.ctx = null; this.ready = false; this.settings = { vol: 0.8, amb: 1 }; this.voices = []; this.next = {}; }
+
+  start() {
+    if (this.ctx) { this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = (this.ctx = new AC());
+    this.master = ctx.createGain(); this.master.gain.value = 0;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 3.5; comp.attack.value = 0.008; comp.release.value = 0.3;
+    this.master.connect(comp).connect(ctx.destination);
+    this.ambOut = ctx.createGain(); this.ambOut.gain.value = this.settings.amb;
+    this.ambLP = ctx.createBiquadFilter(); this.ambLP.type = 'lowpass'; this.ambLP.frequency.value = 18000;
+    this.ambOut.connect(this.ambLP).connect(this.master);
+    this.sfx = ctx.createGain(); this.sfx.connect(this.master);
+    this.revIn = ctx.createGain();
+    const rev = ctx.createConvolver(); rev.buffer = this.makeIR(3.4);
+    const revOut = ctx.createGain(); revOut.gain.value = 0.55;
+    this.revIn.connect(rev).connect(revOut).connect(this.master);
+    this.white = this.noise('white', 4); this.pink = this.noise('pink', 4); this.brown = this.noise('brown', 4);
+    this.buildBeds();
+    this.buildBike();
+    this.buildCritters();
+    this.master.gain.setTargetAtTime(this.settings.vol, ctx.currentTime + 0.2, 1.2);
+    this.ready = true;
+  }
+  setVolume(v) { this.settings.vol = v; if (this.ready) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1); }
+  setAmbience(v) { this.settings.amb = v; if (this.ready) this.ambOut.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1); }
+  suspend(s) { if (!this.ctx) return; if (s) this.ctx.suspend(); else this.ctx.resume(); }
+
+  noise(kind, sec) {
+    const ctx = this.ctx, len = Math.floor(ctx.sampleRate * sec);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0, last = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        if (kind === 'white') d[i] = w * 0.5;
+        else if (kind === 'pink') {
+          b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852;
+          b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898;
+          d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.09; b6 = w * 0.115926;
+        } else { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.2; }
+      }
+    }
+    return buf;
+  }
+  makeIR(sec) {
+    const ctx = this.ctx, len = Math.floor(ctx.sampleRate * sec);
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / ctx.sampleRate;
+        lp = lp * 0.6 + (Math.random() * 2 - 1) * 0.4;
+        let v = lp * Math.pow(1 - t / sec, 2.2) * Math.exp(-t * 1.1);
+        // a few discrete echoes off the hills
+        for (const e of [0.19, 0.37, 0.61]) if (Math.abs(t - e - ch * 0.013) < 0.004) v += (Math.random() - 0.5) * 0.9 * (1 - e);
+        d[i] = v;
+      }
+    }
+    return buf;
+  }
+  loop(buf, dest, rate = 1) {
+    const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.playbackRate.value = rate;
+    s.loopStart = Math.random() * 2; s.start(0, Math.random() * 3); s.connect(dest); return s;
+  }
+  filt(type, f, q = 1) { const b = this.ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
+  gain(v = 0) { const g = this.ctx.createGain(); g.gain.value = v; return g; }
+  osc(type, f) { const o = this.ctx.createOscillator(); o.type = type; o.frequency.value = f; return o; }
+  panner(x, y, z, ref = 5, roll = 1) {
+    const p = this.ctx.createPanner();
+    p.panningModel = 'equalpower'; p.distanceModel = 'inverse'; p.refDistance = ref; p.rolloffFactor = roll; p.maxDistance = 10000;
+    this.setPos(p, x, y, z);
+    return p;
+  }
+  setPos(p, x, y, z) {
+    if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; } else p.setPosition(x, y, z);
+  }
+  // spatial chain: returns input gain node; auto-disconnects nothing (GC handles finished graphs)
+  spot(x, y, z, o = {}) {
+    const g = this.gain(o.gain ?? 1);
+    const p = this.panner(x, y, z, o.ref ?? 6, o.roll ?? 1);
+    g.connect(p); p.connect(o.sfx ? this.sfx : this.ambOut);
+    if (o.rev) { const s = this.gain(o.rev); p.connect(s); s.connect(this.revIn); }
+    return g;
+  }
+
+  // ---------------------------------------------------------------- continuous beds
+  buildBeds() {
+    const c = this.ctx;
+    const B = (this.beds = {});
+    // wind
+    B.windLP = this.filt('lowpass', 500, 0.5); B.wind = this.gain(0);
+    this.loop(this.brown, B.windLP); B.windLP.connect(B.wind).connect(this.ambOut);
+    // leaves rustle
+    B.leafBP = this.filt('bandpass', 2600, 0.6); B.leaf = this.gain(0);
+    this.loop(this.white, B.leafBP, 0.9); B.leafBP.connect(B.leaf).connect(this.ambOut);
+    // aburazemi chorus: sizzling noise with fast amplitude modulation, two layers
+    const cic = (f, q, am, depth) => {
+      const bp = this.filt('bandpass', f, q), bp2 = this.filt('peaking', f * 1.3, 2); bp2.gain.value = 6;
+      const amg = this.gain(1 - depth);
+      const lfo = this.osc('sine', am); const lg = this.gain(depth); lfo.connect(lg).connect(amg.gain); lfo.start();
+      const out = this.gain(0);
+      this.loop(this.white, bp, rnd(0.95, 1.05)); bp.connect(bp2).connect(amg).connect(out);
+      return { out, lfo };
+    };
+    B.abura1 = cic(4300, 1.4, 68, 0.6); B.abura2 = cic(5900, 1.8, 94, 0.5);
+    const sp = c.createStereoPanner ? c.createStereoPanner() : null;
+    if (sp) { sp.pan.value = -0.35; B.abura1.out.connect(sp).connect(this.ambOut); } else B.abura1.out.connect(this.ambOut);
+    const sp2 = c.createStereoPanner ? c.createStereoPanner() : null;
+    if (sp2) { sp2.pan.value = 0.4; B.abura2.out.connect(sp2).connect(this.ambOut); } else B.abura2.out.connect(this.ambOut);
+    // distant hill chorus (minmin wash), slow swells
+    B.far = cic(3400, 3, 23, 0.7); B.far.out.connect(this.ambOut);
+    const farRev = this.gain(0.6); B.far.out.connect(farRev).connect(this.revIn);
+    // night insect bed (many crickets far away)
+    B.night1 = cic(4400, 9, 38, 0.85); B.night1.out.connect(this.ambOut);
+    B.night2 = cic(5300, 12, 24, 0.9); B.night2.out.connect(this.ambOut);
+    // frog chorus far
+    B.frog = cic(1500, 3, 13, 0.9); B.frog.out.connect(this.ambOut);
+    const frogRev = this.gain(0.5); B.frog.out.connect(frogRev).connect(this.revIn);
+    // river
+    B.riverLP = this.filt('lowpass', 1500, 0.5); B.riverBP = this.filt('bandpass', 700, 1.4);
+    B.river = this.gain(0); B.riverP = this.panner(0, 0, 0, 7, 1.1);
+    this.loop(this.pink, B.riverLP); this.loop(this.white, B.riverBP, 0.7);
+    B.riverLP.connect(B.river); const rb = this.gain(0.35); B.riverBP.connect(rb).connect(B.river);
+    B.river.connect(B.riverP).connect(this.ambOut);
+    // vending machine hum
+    B.hum = this.gain(0); B.humP = this.panner(0, 0, 0, 1.5, 1.6);
+    const h1 = this.osc('sine', 100), h2 = this.osc('sine', 200), h3 = this.osc('triangle', 300);
+    const hg2 = this.gain(0.4), hg3 = this.gain(0.08);
+    h1.connect(B.hum); h2.connect(hg2).connect(B.hum); h3.connect(hg3).connect(B.hum);
+    const fan = this.filt('lowpass', 380, 0.7); const fg = this.gain(0.9); this.loop(this.pink, fan); fan.connect(fg).connect(B.hum);
+    h1.start(); h2.start(); h3.start();
+    B.hum.connect(B.humP).connect(this.ambOut);
+    // rain? (not yet)
+  }
+  buildBike() {
+    const K = (this.bikeN = {});
+    K.rollLP = this.filt('lowpass', 300, 0.7); K.roll = this.gain(0);
+    this.loop(this.brown, K.rollLP); K.rollLP.connect(K.roll).connect(this.sfx);
+    K.gravBP = this.filt('bandpass', 1900, 0.8); K.grav = this.gain(0);
+    const crackle = this.gain(0.5); const clfo = this.osc('square', 23); const clg = this.gain(0.5); clfo.connect(clg).connect(crackle.gain); clfo.start();
+    this.loop(this.white, K.gravBP, 1.1); K.gravBP.connect(crackle).connect(K.grav).connect(this.sfx);
+    K.chainBP = this.filt('bandpass', 3300, 3); K.chain = this.gain(0);
+    this.loop(this.white, K.chainBP, 1.3); K.chainBP.connect(K.chain).connect(this.sfx);
+    K.sq = this.gain(0);
+    const so = this.osc('triangle', 2850), vib = this.osc('sine', 7), vg = this.gain(35);
+    vib.connect(vg).connect(so.frequency); so.connect(K.sq).connect(this.sfx); so.start(); vib.start();
+    K.windRush = this.filt('highpass', 600, 0.5); K.rush = this.gain(0);
+    this.loop(this.pink, K.windRush, 1.2); K.windRush.connect(K.rush).connect(this.sfx);
+    this.tickT = 0;
+    this.tickBuf = (() => { const len = Math.floor(this.ctx.sampleRate * 0.006); const b = this.ctx.createBuffer(1, len, this.ctx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.18)) + Math.sin(i * 0.9) * 0.4 * Math.exp(-i / (len * 0.3)); return b; })();
+  }
+  // persistent spatial voices: crickets in the grass, frogs in the paddies
+  buildCritters() {
+    this.crickets = [];
+    for (let i = 0; i < 7; i++) {
+      const kind = pick(['suzu', 'suzu', 'matsu', 'koro', 'kane']);
+      const f = kind === 'suzu' ? rnd(4100, 4700) : kind === 'matsu' ? rnd(3600, 4100) : kind === 'kane' ? rnd(5200, 5900) : rnd(4600, 5200);
+      const o = this.osc('sine', f);
+      const am = this.gain(0.5); const lfo = this.osc('square', kind === 'koro' ? 26 : kind === 'kane' ? 17 : 48); const lg = this.gain(0.5);
+      lfo.connect(lg).connect(am.gain); lfo.start();
+      const env = this.gain(0);
+      const p = this.panner(0, 0, 0, 2.5, 1.3);
+      o.connect(am).connect(env).connect(p).connect(this.ambOut);
+      o.start();
+      this.crickets.push({ kind, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: rnd(0.04, 0.09) });
+    }
+    this.frogs = [];
+    for (let i = 0; i < 9; i++) {
+      const big = Math.random() < 0.2;
+      const o = this.osc('square', big ? rnd(380, 520) : rnd(1100, 1700));
+      const bp = this.filt('bandpass', big ? 700 : 1900, big ? 2 : 3);
+      const am = this.gain(0.5); const lfo = this.osc('square', big ? 18 : rnd(38, 60)); const lg = this.gain(0.5);
+      lfo.connect(lg).connect(am.gain); lfo.start();
+      const env = this.gain(0);
+      const p = this.panner(0, 0, 0, 3, 1.2);
+      o.connect(bp).connect(am).connect(env).connect(p).connect(this.ambOut);
+      const s = this.gain(0.25); p.connect(s).connect(this.revIn);
+      o.start();
+      this.frogs.push({ big, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: big ? rnd(0.08, 0.12) : rnd(0.035, 0.07) });
+    }
+  }
+
+  // ---------------------------------------------------------------- per-frame
+  // env: {hour, gust, trees(0..1), paddy(0..1), grass(0..1), river:{x,y,z,d}, hum:{x,y,z,d}, night, listener, bike:{...}, indoor, findTree(), findPaddy(), findGrass(), houses()}
+  update(dt, env) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime, B = this.beds, h = env.hour;
+    const L = c.listener, cam = env.cam;
+    if (L.positionX) {
+      L.positionX.value = cam.x; L.positionY.value = cam.y; L.positionZ.value = cam.z;
+      L.forwardX.value = env.fwd.x; L.forwardY.value = env.fwd.y; L.forwardZ.value = env.fwd.z;
+      L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0;
+    } else { L.setPosition(cam.x, cam.y, cam.z); L.setOrientation(env.fwd.x, env.fwd.y, env.fwd.z, 0, 1, 0); }
+    const set = (param, v, tc = 0.6) => param.setTargetAtTime(v, t, tc);
+    const gust = env.gust;
+    set(B.wind.gain, (0.035 + 0.13 * gust) * (env.indoor ? 0.3 : 1), 0.8);
+    set(B.windLP.frequency, 260 + 520 * gust, 0.8);
+    set(B.leaf.gain, gust * gust * 0.06 * (0.2 + env.trees), 0.5);
+    const abura = band(h, 7.2, 17.4, 1.1), minmin = band(h, 8.3, 15.8, 1.0);
+    const higu = Math.max(band(h, 4.5, 6.4, 0.35), band(h, 17.5, 19.4, 0.35));
+    const cricket = Math.max(ss(18.4, 19.6, h), 1 - ss(3.8, 5.0, h));
+    const frog = Math.max(ss(18.0, 19.3, h), 1 - ss(2.5, 4.2, h));
+    set(B.abura1.out.gain, abura * (0.012 + 0.05 * env.trees), 1.5);
+    set(B.abura2.out.gain, abura * (0.006 + 0.03 * env.trees), 1.5);
+    set(B.far.out.gain, Math.max(abura * 0.6, higu * 0.35) * 0.014, 2);
+    set(B.night1.out.gain, cricket * (0.004 + 0.012 * env.grass), 2);
+    set(B.night2.out.gain, cricket * 0.004, 2);
+    set(B.frog.out.gain, frog * (0.002 + 0.02 * env.paddy), 2);
+    if (env.river) { this.setPos(B.riverP, env.river.x, env.river.y, env.river.z); set(B.river.gain, 0.22 * ss(70, 8, env.river.d), 0.4); }
+    if (env.hum) { this.setPos(B.humP, env.hum.x, env.hum.y, env.hum.z); set(B.hum.gain, 0.012 * ss(14, 2, env.hum.d), 0.3); }
+    set(this.ambLP.frequency, env.indoor ? 1800 : 18000, 0.3);
+    this.updateBikeSound(env.bike, t);
+    // scheduled critters
+    const sch = (key, rate, fn) => { if (!this.next[key]) this.next[key] = t + rnd(1, 5); if (t > this.next[key]) { this.next[key] = t + rate * rnd(0.5, 1.5); fn(); } };
+    if (minmin > 0.05) sch('minmin', 9 / minmin, () => { const tr = env.findTree(45); if (tr) this.minmin(tr.x, tr.y + rnd(3, 7), tr.z); });
+    if (higu > 0.05) sch('higu', 5.5 / higu, () => { const tr = env.findTree(90, 20); if (tr) this.higurashi(tr.x, tr.y + rnd(4, 9), tr.z); });
+    if (abura > 0.1) sch('abura', 7 / abura, () => { const tr = env.findTree(30); if (tr) this.aburazemi(tr.x, tr.y + rnd(2, 6), tr.z); });
+    const morning = band(h, 4.9, 9.5, 0.4), dusk = band(h, 16.6, 19.0, 0.4), day = band(h, 6, 18, 1);
+    if (morning > 0.1 || day > 0.5) sch('sparrow', 6 / Math.max(morning, day * 0.25), () => { const p = env.findHouse(40); if (p) this.sparrow(p.x, p.y + rnd(3, 6), p.z); });
+    if (morning + dusk > 0.1) sch('crow', 16 / (morning * 0.5 + dusk), () => this.crow(cam.x + rnd(-150, 150), cam.y + rnd(20, 50), cam.z + rnd(-150, 150)));
+    if (band(h, 9, 16, 0.5) > 0.1) sch('kite', 55, () => this.kite(cam.x + rnd(-120, 120), cam.y + rnd(50, 90), cam.z + rnd(-120, 120)));
+    if (morning > 0.1) sch('uguisu', 22 / morning, () => { const tr = env.findTree(120, 40); if (tr) this.uguisu(tr.x, tr.y + 5, tr.z); });
+    if (env.night > 0.8 && (h > 21 || h < 3)) sch('dog', 70, () => this.dog(cam.x + rnd(-200, 200), cam.y, cam.z + rnd(-200, 200)));
+    // furin on gusts
+    if (gust > 0.62) sch('furin', 2.2, () => { const f = env.findFurin(30); if (f) this.furin(f.x, f.y, f.z); });
+    this.updateCrickets(env, cricket, t);
+    this.updateFrogs(env, frog, t);
+  }
+  updateCrickets(env, level, t) {
+    for (const v of this.crickets) {
+      const d = Math.hypot(v.x - env.cam.x, v.z - env.cam.z);
+      if (!v.placed || d > 28) {
+        const p = env.findGrass(4, 20);
+        if (p) { v.x = p.x; v.y = p.y + 0.1; v.z = p.z; v.placed = true; this.setPos(v.p, v.x, v.y, v.z); }
+      }
+      if (level < 0.05 || !v.placed) continue;
+      if (t + 0.25 > v.next) {
+        const s = Math.max(v.next, t + 0.02), g = v.env.gain, A = v.vol * level;
+        if (v.kind === 'suzu') { g.setValueAtTime(0, s); g.linearRampToValueAtTime(A, s + 0.05); g.setValueAtTime(A, s + 0.32); g.linearRampToValueAtTime(0, s + 0.42); v.next = s + rnd(0.7, 1.6); }
+        else if (v.kind === 'matsu') { for (const [a, b] of [[0, 0.05], [0.12, 0.17], [0.28, 0.58]]) { g.setValueAtTime(0, s + a); g.linearRampToValueAtTime(A, s + a + 0.01); g.setValueAtTime(A, s + b); g.linearRampToValueAtTime(0, s + b + 0.02); } v.next = s + rnd(1.2, 2.4); }
+        else if (v.kind === 'kane') { for (let k = 0; k < 3; k++) { g.setValueAtTime(0, s + k * 0.22); g.linearRampToValueAtTime(A, s + k * 0.22 + 0.01); g.exponentialRampToValueAtTime(0.0005, s + k * 0.22 + 0.18); } v.next = s + rnd(1.6, 3.2); }
+        else { g.setValueAtTime(0, s); g.linearRampToValueAtTime(A * 0.8, s + 0.03); g.setValueAtTime(A * 0.8, s + 0.45); g.linearRampToValueAtTime(0, s + 0.55); v.next = s + rnd(0.6, 1.2); }
+      }
+    }
+  }
+  updateFrogs(env, level, t) {
+    for (const v of this.frogs) {
+      const d = Math.hypot(v.x - env.cam.x, v.z - env.cam.z);
+      if (!v.placed || d > 75) {
+        const p = env.findPaddy(60);
+        if (p) { v.x = p.x; v.y = p.y + 0.1; v.z = p.z; v.placed = true; this.setPos(v.p, v.x, v.y, v.z); } else v.placed = false;
+      }
+      if (level < 0.05 || !v.placed) continue;
+      if (t + 0.3 > v.next) {
+        const s = Math.max(v.next, t + 0.02), g = v.env.gain, A = v.vol * level;
+        const n = v.big ? 2 : Math.floor(rnd(3, 9)), per = v.big ? 0.6 : rnd(0.1, 0.14), on = v.big ? 0.4 : 0.06;
+        for (let k = 0; k < n; k++) { const a = s + k * per; g.setValueAtTime(0, a); g.linearRampToValueAtTime(A, a + 0.01); g.setValueAtTime(A, a + on); g.linearRampToValueAtTime(0, a + on + 0.02); }
+        v.next = s + n * per + rnd(0.6, 3.5);
+      }
+    }
+  }
+  updateBikeSound(b, t) {
+    const K = this.bikeN;
+    const set = (p, v, tc = 0.08) => p.setTargetAtTime(v, t, tc);
+    if (!b || !b.riding) { set(K.roll.gain, 0); set(K.grav.gain, 0); set(K.chain.gain, 0); set(K.sq.gain, 0); set(K.rush.gain, 0); return; }
+    const v = Math.abs(b.speed);
+    const paved = b.surface === 'asphalt' || b.surface === 'concrete' || b.surface === 'wood';
+    set(K.roll.gain, Math.min(0.2, v * 0.022) * (paved ? 1 : 0.6));
+    set(K.rollLP.frequency, 180 + v * 70);
+    set(K.grav.gain, paved ? 0 : Math.min(0.12, v * 0.018) * (b.surface === 'grass' ? 0.4 : 1));
+    set(K.chain.gain, b.pedaling * Math.min(0.012, v * 0.003));
+    set(K.sq.gain, b.braking && v > 1 ? Math.min(0.035, v * 0.006) : 0, 0.05);
+    set(K.rush.gain, Math.max(0, v - 3) * 0.006);
+    // freewheel ticking when coasting
+    if (!b.pedaling && v > 0.4) {
+      const rate = v / (2 * Math.PI * 0.33) * 18;
+      if (this.tickT < t) this.tickT = t;
+      while (this.tickT < t + 0.08) {
+        const s = this.ctx.createBufferSource(); s.buffer = this.tickBuf; s.playbackRate.value = rnd(0.9, 1.1);
+        const g = this.gain(0.035 + Math.min(0.03, v * 0.004)); s.connect(g).connect(this.sfx); s.start(this.tickT);
+        this.tickT += 1 / rate;
+      }
+    } else this.tickT = t;
+  }
+
+  // ---------------------------------------------------------------- creatures
+  minmin(x, y, z) {
+    const c = this.ctx, t0 = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { gain: 1, ref: 7, rev: 0.25 });
+    const o = this.osc('sawtooth', 520);
+    const f1 = this.filt('bandpass', 1900, 3.5), f2 = this.filt('bandpass', 4600, 2);
+    const am = this.gain(0.55); const lfo = this.osc('sine', rnd(105, 135)); const lg = this.gain(0.45); lfo.connect(lg).connect(am.gain);
+    const env = this.gain(0);
+    o.connect(f1).connect(am); o.connect(f2).connect(am); am.connect(env).connect(out);
+    const n = Math.floor(rnd(5, 9)), per = rnd(0.38, 0.46), A = rnd(0.07, 0.13);
+    const g = env.gain;
+    g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A * 0.45, t0 + 0.9);
+    o.frequency.setValueAtTime(480, t0); o.frequency.linearRampToValueAtTime(540, t0 + 0.9);
+    let ts = t0 + 0.9;
+    for (let i = 0; i < n; i++) {
+      const acc = 1 - (i / n) * 0.25;
+      o.frequency.setValueAtTime(520, ts); o.frequency.linearRampToValueAtTime(650, ts + 0.12 * acc); o.frequency.linearRampToValueAtTime(560, ts + 0.32 * acc);
+      f1.frequency.setValueAtTime(1600, ts); f1.frequency.linearRampToValueAtTime(2600, ts + 0.12 * acc); f1.frequency.linearRampToValueAtTime(1800, ts + 0.32 * acc);
+      g.setValueAtTime(A * 0.4, ts); g.linearRampToValueAtTime(A, ts + 0.06); g.linearRampToValueAtTime(A * 0.9, ts + 0.26 * acc); g.linearRampToValueAtTime(A * 0.35, ts + per * acc);
+      ts += per * acc;
+    }
+    o.frequency.linearRampToValueAtTime(600, ts + 0.3); g.linearRampToValueAtTime(A * 0.8, ts + 0.3); g.linearRampToValueAtTime(0, ts + 1.6);
+    o.start(t0); lfo.start(t0); o.stop(ts + 1.7); lfo.stop(ts + 1.7);
+  }
+  aburazemi(x, y, z) {
+    const c = this.ctx, t0 = c.currentTime + 0.05, dur = rnd(4, 9);
+    const out = this.spot(x, y, z, { ref: 6, rev: 0.15 });
+    const src = c.createBufferSource(); src.buffer = this.white; src.playbackRate.value = rnd(0.9, 1.1);
+    const bp = this.filt('bandpass', rnd(4000, 5200), 1.6);
+    const am = this.gain(0.4); const lfo = this.osc('sawtooth', rnd(60, 90)); const lg = this.gain(0.6); lfo.connect(lg).connect(am.gain);
+    const env = this.gain(0);
+    src.connect(bp).connect(am).connect(env).connect(out);
+    const A = rnd(0.12, 0.2), g = env.gain;
+    g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A, t0 + 1.2); g.setValueAtTime(A, t0 + dur); g.linearRampToValueAtTime(0, t0 + dur + 1.5);
+    src.start(t0, rnd(0, 2)); lfo.start(t0); src.stop(t0 + dur + 1.6); lfo.stop(t0 + dur + 1.6);
+  }
+  higurashi(x, y, z) {
+    const c = this.ctx, t0 = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 10, roll: 0.7, rev: 0.75 });
+    const o = this.osc('sine', 4500), o2 = this.osc('sine', 9000);
+    const g2 = this.gain(0.18); o2.connect(g2);
+    const am = this.gain(0.5); const ring = this.osc('sine', rnd(170, 210)); const rg = this.gain(0.5); ring.connect(rg).connect(am.gain);
+    const env = this.gain(0);
+    o.connect(am); g2.connect(am); am.connect(env).connect(out);
+    const n = Math.floor(rnd(18, 34)), f0 = rnd(4200, 4900), A = rnd(0.06, 0.1);
+    let tp = t0, iv = 0.105;
+    const g = env.gain;
+    g.setValueAtTime(0, t0);
+    for (let i = 0; i < n; i++) {
+      const k = i / n;
+      const amp = A * Math.min(1, (i + 1) / 3) * (1 - k * 0.8);
+      const f = f0 * (1 - 0.07 * k);
+      o.frequency.setValueAtTime(f * 0.93, tp); o.frequency.linearRampToValueAtTime(f, tp + 0.02); o.frequency.linearRampToValueAtTime(f * 0.95, tp + 0.08);
+      o2.frequency.setValueAtTime(f * 1.86, tp); o2.frequency.linearRampToValueAtTime(f * 2, tp + 0.02);
+      g.setValueAtTime(0.0001, tp); g.linearRampToValueAtTime(amp, tp + 0.008); g.exponentialRampToValueAtTime(Math.max(amp * 0.05, 0.0001), tp + iv * 0.85);
+      tp += iv; iv += 0.0025 + rnd(0, 0.002);
+    }
+    o.start(t0); o2.start(t0); ring.start(t0); const end = tp + 0.3; o.stop(end); o2.stop(end); ring.stop(end);
+  }
+  sparrow(x, y, z) {
+    const c = this.ctx; let t = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 5, rev: 0.1 });
+    const n = Math.floor(rnd(2, 6));
+    for (let i = 0; i < n; i++) {
+      const o = this.osc('sine', 4000), g = this.gain(0);
+      o.connect(g).connect(out);
+      const f = rnd(3600, 5200), d = rnd(0.05, 0.09);
+      o.frequency.setValueAtTime(f * 0.8, t); o.frequency.linearRampToValueAtTime(f * 1.2, t + d * 0.4); o.frequency.linearRampToValueAtTime(f, t + d);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+      o.start(t); o.stop(t + d + 0.02);
+      t += d + rnd(0.05, 0.22);
+    }
+  }
+  crow(x, y, z) {
+    const c = this.ctx; let t = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 18, roll: 0.8, rev: 0.5 });
+    const n = Math.floor(rnd(2, 5));
+    for (let i = 0; i < n; i++) {
+      const o = this.osc('sawtooth', rnd(480, 560));
+      const f1 = this.filt('bandpass', 1150, 1.6), f2 = this.filt('bandpass', 2400, 2.5);
+      const g = this.gain(0);
+      const ns = c.createBufferSource(); ns.buffer = this.white; const nf = this.filt('bandpass', 1500, 1.2); const ng = this.gain(0.35);
+      o.connect(f1).connect(g); o.connect(f2).connect(g); ns.connect(nf).connect(ng).connect(g); g.connect(out);
+      const d = rnd(0.3, 0.42);
+      o.frequency.setValueAtTime(o.frequency.value, t); o.frequency.linearRampToValueAtTime(o.frequency.value * 0.86, t + d);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.04); g.gain.setValueAtTime(0.15, t + d * 0.6); g.gain.linearRampToValueAtTime(0, t + d);
+      o.start(t); ns.start(t, rnd(0, 2)); o.stop(t + d + 0.05); ns.stop(t + d + 0.05);
+      t += d + rnd(0.22, 0.45);
+    }
+  }
+  kite(x, y, z) {
+    const c = this.ctx, t = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 30, roll: 0.6, rev: 0.6 });
+    const o = this.osc('sine', 2600), g = this.gain(0);
+    const lfo = this.osc('sine', 13), lg = this.gain(0); lfo.connect(lg).connect(o.frequency);
+    o.connect(g).connect(out);
+    o.frequency.setValueAtTime(2500, t); o.frequency.linearRampToValueAtTime(3150, t + 0.75);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09, t + 0.1); g.gain.setValueAtTime(0.09, t + 0.7); g.gain.linearRampToValueAtTime(0.02, t + 0.82);
+    o.frequency.setValueAtTime(3050, t + 0.85); o.frequency.linearRampToValueAtTime(2250, t + 2.3);
+    lg.gain.setValueAtTime(0, t + 0.85); lg.gain.linearRampToValueAtTime(260, t + 1.0);
+    g.gain.linearRampToValueAtTime(0.08, t + 0.95); g.gain.linearRampToValueAtTime(0.0, t + 2.35);
+    o.start(t); lfo.start(t); o.stop(t + 2.5); lfo.stop(t + 2.5);
+  }
+  uguisu(x, y, z) {
+    const c = this.ctx, t = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 20, roll: 0.7, rev: 0.6 });
+    const o = this.osc('sine', 1150), g = this.gain(0);
+    o.connect(g).connect(out);
+    const F = o.frequency, A = g.gain;
+    F.setValueAtTime(1100, t); F.linearRampToValueAtTime(1320, t + 1.3);
+    A.setValueAtTime(0, t); A.linearRampToValueAtTime(0.07, t + 0.35); A.setValueAtTime(0.07, t + 1.2); A.linearRampToValueAtTime(0, t + 1.35);
+    const notes = [[1.5, 0.08, 2150, 2200], [1.62, 0.1, 2950, 2700], [1.78, 0.38, 2650, 2350]];
+    for (const [s, d, fa, fb] of notes) { F.setValueAtTime(fa, t + s); F.linearRampToValueAtTime(fb, t + s + d); A.setValueAtTime(0, t + s); A.linearRampToValueAtTime(0.08, t + s + 0.015); A.setValueAtTime(0.075, t + s + d * 0.7); A.linearRampToValueAtTime(0, t + s + d); }
+    o.start(t); o.stop(t + 2.3);
+  }
+  dog(x, y, z) {
+    const c = this.ctx; let t = c.currentTime + 0.05;
+    const out = this.spot(x, y, z, { ref: 25, roll: 0.8, rev: 0.6 });
+    for (let i = 0; i < Math.floor(rnd(2, 4)); i++) {
+      const o = this.osc('sawtooth', rnd(380, 450)), f = this.filt('bandpass', 900, 1.5), g = this.gain(0);
+      o.connect(f).connect(g).connect(out);
+      o.frequency.setValueAtTime(o.frequency.value * 1.2, t); o.frequency.exponentialRampToValueAtTime(o.frequency.value * 0.7, t + 0.16);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      o.start(t); o.stop(t + 0.2); t += rnd(0.28, 0.4);
+    }
+  }
+  furin(x, y, z) {
+    const c = this.ctx; let t = c.currentTime + 0.03;
+    const out = this.spot(x, y, z, { ref: 3, roll: 1.2, rev: 0.35 });
+    const f0 = rnd(2400, 3100);
+    for (let k = 0; k < Math.floor(rnd(1, 4)); k++) {
+      [[1, 1, 1.8], [2.74, 0.45, 1.0], [5.07, 0.25, 0.5], [8.0, 0.1, 0.3]].forEach(([r, a, d]) => {
+        if (f0 * r > 16000) return;
+        const o = this.osc('sine', f0 * r * rnd(0.998, 1.002)), g = this.gain(0);
+        o.connect(g).connect(out);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05 * a, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0002, t + d);
+        o.start(t); o.stop(t + d + 0.05);
+      });
+      t += rnd(0.12, 0.35);
+    }
+  }
+
+  // ---------------------------------------------------------------- one-shots (non-spatial)
+  metal(t, partials, dest, amp = 1) {
+    for (const [f, a, d] of partials) {
+      const o = this.osc('sine', f), g = this.gain(0);
+      o.connect(g).connect(dest);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * amp, t + 0.002); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.start(t); o.stop(t + d + 0.02);
+    }
+  }
+  bell() {
+    if (!this.ready) return;
+    const t0 = this.ctx.currentTime + 0.01;
+    const P = [[2340, 0.09, 0.7], [3990, 0.05, 0.45], [5630, 0.03, 0.3], [7870, 0.012, 0.18]];
+    for (const burst of [0, 0.36]) for (let k = 0; k < 8; k++) this.metal(t0 + burst + k * 0.032, P, this.sfx, Math.pow(0.82, k));
+  }
+  click() { if (!this.ready) return; this.metal(this.ctx.currentTime, [[3200, 0.04, 0.05]], this.sfx); }
+  burst(t, f, q, dur, amp, dest = this.sfx, type = 'bandpass') {
+    const s = this.ctx.createBufferSource(); s.buffer = this.white;
+    const fl = this.filt(type, f, q), g = this.gain(0);
+    s.connect(fl).connect(g).connect(dest);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.start(t, Math.random() * 3); s.stop(t + dur + 0.02);
+  }
+  thump(t, f0, f1, dur, amp, dest = this.sfx) {
+    const o = this.osc('sine', f0), g = this.gain(0);
+    o.connect(g).connect(dest);
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(amp, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  step(surface, k = 0.6) {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime + 0.005, a = k * rnd(0.8, 1.1);
+    switch (surface) {
+      case 'gravel': case 'dirt': for (let i = 0; i < 4; i++) this.burst(t + i * rnd(0.008, 0.02), rnd(1800, 3200), 0.9, 0.05, 0.07 * a); this.thump(t, 110, 60, 0.06, 0.06 * a); break;
+      case 'grass': case 'tall': this.burst(t, 1100, 0.6, 0.12, 0.05 * a, this.sfx, 'lowpass'); this.burst(t + 0.02, 4200, 0.8, 0.08, 0.025 * a); break;
+      case 'paddy': case 'water': this.burst(t, 700, 0.8, 0.22, 0.09 * a, this.sfx, 'lowpass'); this.burst(t + 0.04, 2200, 1.2, 0.15, 0.04 * a); break;
+      case 'wood': this.thump(t, 160, 90, 0.09, 0.14 * a); this.burst(t, 2400, 1.5, 0.03, 0.04 * a); break;
+      case 'stone': this.burst(t, 2600, 1.4, 0.035, 0.08 * a); this.thump(t, 140, 80, 0.05, 0.07 * a); break;
+      default: this.burst(t, 1300, 1.0, 0.045, 0.08 * a); this.thump(t, 120, 70, 0.05, 0.08 * a);
+    }
+  }
+  kickstand() { if (!this.ready) return; const t = this.ctx.currentTime; this.burst(t, 3000, 2, 0.04, 0.12); this.burst(t + 0.09, 2600, 2, 0.05, 0.1); this.thump(t + 0.09, 150, 70, 0.08, 0.1); }
+  bump(k) { if (!this.ready) return; const t = this.ctx.currentTime; this.thump(t, 95, 45, 0.18, 0.35 * k); this.burst(t, 600, 0.8, 0.12, 0.2 * k, this.sfx, 'lowpass'); this.metal(t + 0.01, [[2340, 0.02 * k, 0.4]], this.sfx); }
+  vending() {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime + 0.05;
+    for (const d of [0, 0.2, 0.36]) { this.metal(t + d, [[4300, 0.05, 0.08], [6100, 0.03, 0.05]], this.sfx); this.burst(t + d, 5000, 2, 0.02, 0.03); }
+    this.thump(t + 0.62, 1350, 1350, 0.1, 0.05);
+    this.burst(t + 1.05, 380, 0.7, 0.16, 0.35, this.sfx, 'lowpass'); this.thump(t + 1.05, 150, 50, 0.14, 0.3);
+    this.burst(t + 1.12, 950, 3, 0.25, 0.06);
+    this.burst(t + 1.9, 2600, 0.5, 0.2, 0.12, this.sfx, 'highpass'); this.burst(t + 1.88, 3800, 3, 0.015, 0.1);
+  }
+  coinBox() {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime + 0.05;
+    for (const d of [0, 0.07, 0.15]) this.burst(t + d, 1300, 2.5, 0.05, 0.09);
+    const sx = this.revIn;
+    for (let k = 0; k < 14; k++) this.metal(t + 0.7 + k * rnd(0.03, 0.07), [[rnd(4000, 4600), 0.025, 0.25], [rnd(6000, 7000), 0.015, 0.18]], this.sfx);
+    for (const d of [1.8, 2.25]) { this.burst(t + d, 1700, 0.7, 0.06, 0.32); this.burst(t + d, 1700, 0.7, 0.06, 0.25, sx); }
+  }
+  shopChime() { if (!this.ready) return; const t = this.ctx.currentTime; this.metal(t, [[1318, 0.06, 0.9], [2636, 0.015, 0.4]], this.sfx); this.metal(t + 0.42, [[1046, 0.06, 1.1], [2092, 0.015, 0.5]], this.sfx); }
+  eat() { if (!this.ready) return; const t = this.ctx.currentTime; for (let i = 0; i < 6; i++) this.burst(t + i * 0.25, 900, 1, 0.08, 0.05); }
+
+  // village loudspeaker melody at 17:00
+  chime(x, y, z) {
+    if (!this.ready) return;
+    const c = this.ctx, t0 = c.currentTime + 0.1;
+    const out = this.spot(x, y, z, { ref: 120, roll: 0.5, gain: 1 });
+    const bp1 = this.filt('highpass', 380, 0.7), bp2 = this.filt('lowpass', 3400, 0.7);
+    const shp = c.createWaveShaper(); const curve = new Float32Array(256); for (let i = 0; i < 256; i++) { const x2 = i / 128 - 1; curve[i] = Math.tanh(x2 * 1.8); } shp.curve = curve;
+    const dl = c.createDelay(1.5); dl.delayTime.value = 0.44; const fb = this.gain(0.38);
+    const sum = this.gain(0.7);
+    sum.connect(bp1).connect(bp2).connect(shp).connect(out);
+    shp.connect(dl); dl.connect(fb).connect(dl); dl.connect(out);
+    const rs = this.gain(0.9); shp.connect(rs).connect(this.revIn);
+    let t = t0; const beat = 0.62;
+    for (const [nn, b] of MELODY) {
+      const f = N[nn];
+      for (const [r, a, d] of [[1, 0.5, 1.6], [2, 0.18, 0.8], [3.01, 0.06, 0.4], [0.5, 0.06, 1.2]]) {
+        const o = this.osc(r === 1 ? 'triangle' : 'sine', f * r), g = this.gain(0);
+        o.connect(g).connect(sum);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0005, t + Math.min(d, b * beat * 1.4 + 0.4));
+        o.start(t); o.stop(t + d + 0.1);
+      }
+      t += b * beat;
+    }
+    return t - t0;
+  }
+  templeBell(x, y, z, delay = 0) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + 0.1 + delay;
+    const out = this.spot(x, y, z, { ref: 200, roll: 0.4, rev: 0.8 });
+    const P = [[57, 0.5, 14], [81.3, 0.32, 10], [114.6, 0.3, 8], [140.2, 0.18, 6], [171, 0.14, 5], [207, 0.1, 4], [252, 0.08, 3], [310, 0.05, 2.4]];
+    for (const [f, a, d] of P) for (const det of [0, 0.42]) {
+      const o = this.osc('sine', f + det), g = this.gain(0);
+      o.connect(g).connect(out);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * 0.5, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.start(t); o.stop(t + d + 0.1);
+    }
+    const s = c.createBufferSource(); s.buffer = this.brown; const g = this.gain(0); s.connect(g).connect(out);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    s.start(t); s.stop(t + 0.5);
+  }
+}
