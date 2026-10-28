@@ -25,7 +25,8 @@ export class AudioEngine {
     this.master = ctx.createGain(); this.master.gain.value = 0;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16; comp.knee.value = 14; comp.ratio.value = 3.5; comp.attack.value = 0.008; comp.release.value = 0.3;
-    this.master.connect(comp).connect(ctx.destination);
+    const makeup = ctx.createGain(); makeup.gain.value = 1.5;
+    this.master.connect(comp).connect(makeup).connect(ctx.destination);
     this.ambOut = ctx.createGain(); this.ambOut.gain.value = this.settings.amb;
     this.ambLP = ctx.createBiquadFilter(); this.ambLP.type = 'lowpass'; this.ambLP.frequency.value = 18000;
     this.ambOut.connect(this.ambLP).connect(this.master);
@@ -184,7 +185,7 @@ export class AudioEngine {
       const p = this.panner(0, 0, 0, 2.5, 1.3);
       o.connect(am).connect(env).connect(p).connect(this.ambOut);
       o.start();
-      this.crickets.push({ kind, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: rnd(0.04, 0.09) });
+      this.crickets.push({ kind, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: rnd(0.12, 0.25) });
     }
     this.frogs = [];
     for (let i = 0; i < 9; i++) {
@@ -194,11 +195,11 @@ export class AudioEngine {
       const am = this.gain(0.5); const lfo = this.osc('square', big ? 18 : rnd(38, 60)); const lg = this.gain(0.5);
       lfo.connect(lg).connect(am.gain); lfo.start();
       const env = this.gain(0);
-      const p = this.panner(0, 0, 0, 3, 1.2);
+      const p = this.panner(0, 0, 0, 7, 1.0);
       o.connect(bp).connect(am).connect(env).connect(p).connect(this.ambOut);
       const s = this.gain(0.25); p.connect(s).connect(this.revIn);
       o.start();
-      this.frogs.push({ big, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: big ? rnd(0.08, 0.12) : rnd(0.035, 0.07) });
+      this.frogs.push({ big, o, env, p, next: 0, x: 0, z: 0, y: 0, placed: false, vol: big ? rnd(0.5, 0.8) : rnd(0.3, 0.55) });
     }
   }
 
@@ -216,21 +217,21 @@ export class AudioEngine {
     const set = (param, v, tc = 0.6) => param.setTargetAtTime(v, t, tc);
     this.lastCam = cam;
     const gust = env.gust;
-    set(B.wind.gain, (0.035 + 0.13 * gust) * (env.indoor ? 0.3 : 1), 0.8);
+    set(B.wind.gain, (0.05 + 0.17 * gust) * (env.indoor ? 0.3 : 1), 0.8);
     set(B.windLP.frequency, 260 + 520 * gust, 0.8);
-    set(B.leaf.gain, gust * gust * 0.06 * (0.2 + env.trees), 0.5);
+    set(B.leaf.gain, gust * gust * 0.12 * (0.2 + env.trees), 0.5);
     const abura = band(h, 7.2, 17.4, 1.1), minmin = band(h, 8.3, 15.8, 1.0);
     const higu = Math.max(band(h, 4.5, 6.4, 0.35), band(h, 17.5, 19.4, 0.35));
     const cricket = Math.max(ss(18.4, 19.6, h), 1 - ss(3.8, 5.0, h));
     const frog = Math.max(ss(18.0, 19.3, h), 1 - ss(2.5, 4.2, h));
-    set(B.abura1.out.gain, abura * (0.012 + 0.05 * env.trees), 1.5);
-    set(B.abura2.out.gain, abura * (0.006 + 0.03 * env.trees), 1.5);
-    set(B.far.out.gain, Math.max(abura * 0.6, higu * 0.35) * 0.014, 2);
-    set(B.night1.out.gain, cricket * (0.004 + 0.012 * env.grass), 2);
-    set(B.night2.out.gain, cricket * 0.004, 2);
-    set(B.frog.out.gain, frog * (0.002 + 0.02 * env.paddy), 2);
-    if (env.river) { this.setPos(B.riverP, env.river.x, env.river.y, env.river.z); set(B.river.gain, 0.22 * ss(70, 8, env.river.d), 0.4); }
-    if (env.hum) { this.setPos(B.humP, env.hum.x, env.hum.y, env.hum.z); set(B.hum.gain, 0.012 * ss(14, 2, env.hum.d), 0.3); }
+    set(B.abura1.out.gain, abura * (0.28 + 0.85 * env.trees), 1.5);
+    set(B.abura2.out.gain, abura * (0.14 + 0.45 * env.trees), 1.5);
+    set(B.far.out.gain, Math.max(abura * 0.6, higu * 0.4) * 0.5, 2);
+    set(B.night1.out.gain, cricket * (0.3 + 0.8 * env.grass), 2);
+    set(B.night2.out.gain, cricket * 0.35, 2);
+    set(B.frog.out.gain, frog * (0.08 + 0.85 * env.paddy), 2);
+    if (env.river) { this.setPos(B.riverP, env.river.x, env.river.y, env.river.z); set(B.river.gain, 0.55 * ss(70, 8, env.river.d), 0.4); }
+    if (env.hum) { this.setPos(B.humP, env.hum.x, env.hum.y, env.hum.z); set(B.hum.gain, 0.03 * ss(14, 2, env.hum.d), 0.3); }
     set(this.ambLP.frequency, env.indoor ? 1800 : 18000, 0.3);
     this.updateBikeSound(env.bike, t);
     // scheduled critters
@@ -290,7 +291,7 @@ export class AudioEngine {
     const paved = b.surface === 'asphalt' || b.surface === 'concrete' || b.surface === 'wood';
     set(K.roll.gain, Math.min(0.2, v * 0.022) * (paved ? 1 : 0.6));
     set(K.rollLP.frequency, 180 + v * 70);
-    set(K.grav.gain, paved ? 0 : Math.min(0.12, v * 0.018) * (b.surface === 'grass' ? 0.4 : 1));
+    set(K.grav.gain, paved ? 0 : Math.min(0.25, v * 0.035) * (b.surface === 'grass' ? 0.4 : 1));
     set(K.chain.gain, b.pedaling * Math.min(0.012, v * 0.003));
     set(K.sq.gain, b.braking && v > 1 ? Math.min(0.035, v * 0.006) : 0, 0.05);
     set(K.rush.gain, Math.max(0, v - 3) * 0.006);
@@ -300,7 +301,7 @@ export class AudioEngine {
       if (this.tickT < t) this.tickT = t;
       while (this.tickT < t + 0.08) {
         const s = this.ctx.createBufferSource(); s.buffer = this.tickBuf; s.playbackRate.value = rnd(0.9, 1.1);
-        const g = this.gain(0.035 + Math.min(0.03, v * 0.004)); s.connect(g).connect(this.sfx); s.start(this.tickT);
+        const g = this.gain(0.06 + Math.min(0.05, v * 0.007)); s.connect(g).connect(this.sfx); s.start(this.tickT);
         this.tickT += 1 / rate;
       }
     } else this.tickT = t;
@@ -315,7 +316,7 @@ export class AudioEngine {
     const am = this.gain(0.55); const lfo = this.osc('sine', rnd(105, 135)); const lg = this.gain(0.45); lfo.connect(lg).connect(am.gain);
     const env = this.gain(0);
     o.connect(f1).connect(am); o.connect(f2).connect(am); am.connect(env).connect(out);
-    const n = Math.floor(rnd(5, 9)), per = rnd(0.38, 0.46), A = rnd(0.07, 0.13);
+    const n = Math.floor(rnd(5, 9)), per = rnd(0.38, 0.46), A = rnd(0.45, 0.75);
     const g = env.gain;
     g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A * 0.45, t0 + 0.9);
     o.frequency.setValueAtTime(480, t0); o.frequency.linearRampToValueAtTime(540, t0 + 0.9);
@@ -338,7 +339,7 @@ export class AudioEngine {
     const am = this.gain(0.4); const lfo = this.osc('sawtooth', rnd(60, 90)); const lg = this.gain(0.6); lfo.connect(lg).connect(am.gain);
     const env = this.gain(0);
     src.connect(bp).connect(am).connect(env).connect(out);
-    const A = rnd(0.12, 0.2), g = env.gain;
+    const A = rnd(0.7, 1.1), g = env.gain;
     g.setValueAtTime(0, t0); g.linearRampToValueAtTime(A, t0 + 1.2); g.setValueAtTime(A, t0 + dur); g.linearRampToValueAtTime(0, t0 + dur + 1.5);
     src.start(t0, rnd(0, 2)); lfo.start(t0); src.stop(t0 + dur + 1.6); lfo.stop(t0 + dur + 1.6);
   }
@@ -350,7 +351,7 @@ export class AudioEngine {
     const am = this.gain(0.5); const ring = this.osc('sine', rnd(170, 210)); const rg = this.gain(0.5); ring.connect(rg).connect(am.gain);
     const env = this.gain(0);
     o.connect(am); g2.connect(am); am.connect(env).connect(out);
-    const n = Math.floor(rnd(18, 34)), f0 = rnd(4200, 4900), A = rnd(0.06, 0.1);
+    const n = Math.floor(rnd(18, 34)), f0 = rnd(4200, 4900), A = rnd(0.25, 0.4);
     let tp = t0, iv = 0.105;
     const g = env.gain;
     g.setValueAtTime(0, t0);
@@ -374,7 +375,7 @@ export class AudioEngine {
       o.connect(g).connect(out);
       const f = rnd(3600, 5200), d = rnd(0.05, 0.09);
       o.frequency.setValueAtTime(f * 0.8, t); o.frequency.linearRampToValueAtTime(f * 1.2, t + d * 0.4); o.frequency.linearRampToValueAtTime(f, t + d);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0005, t + d);
       o.start(t); o.stop(t + d + 0.02);
       t += d + rnd(0.05, 0.22);
     }
@@ -391,7 +392,7 @@ export class AudioEngine {
       o.connect(f1).connect(g); o.connect(f2).connect(g); ns.connect(nf).connect(ng).connect(g); g.connect(out);
       const d = rnd(0.3, 0.42);
       o.frequency.setValueAtTime(o.frequency.value, t); o.frequency.linearRampToValueAtTime(o.frequency.value * 0.86, t + d);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.04); g.gain.setValueAtTime(0.15, t + d * 0.6); g.gain.linearRampToValueAtTime(0, t + d);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.4, t + 0.04); g.gain.setValueAtTime(0.38, t + d * 0.6); g.gain.linearRampToValueAtTime(0, t + d);
       o.start(t); ns.start(t, rnd(0, 2)); o.stop(t + d + 0.05); ns.stop(t + d + 0.05);
       t += d + rnd(0.22, 0.45);
     }
@@ -403,10 +404,10 @@ export class AudioEngine {
     const lfo = this.osc('sine', 13), lg = this.gain(0); lfo.connect(lg).connect(o.frequency);
     o.connect(g).connect(out);
     o.frequency.setValueAtTime(2500, t); o.frequency.linearRampToValueAtTime(3150, t + 0.75);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.09, t + 0.1); g.gain.setValueAtTime(0.09, t + 0.7); g.gain.linearRampToValueAtTime(0.02, t + 0.82);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.15, t + 0.1); g.gain.setValueAtTime(0.15, t + 0.7); g.gain.linearRampToValueAtTime(0.03, t + 0.82);
     o.frequency.setValueAtTime(3050, t + 0.85); o.frequency.linearRampToValueAtTime(2250, t + 2.3);
     lg.gain.setValueAtTime(0, t + 0.85); lg.gain.linearRampToValueAtTime(260, t + 1.0);
-    g.gain.linearRampToValueAtTime(0.08, t + 0.95); g.gain.linearRampToValueAtTime(0.0, t + 2.35);
+    g.gain.linearRampToValueAtTime(0.13, t + 0.95); g.gain.linearRampToValueAtTime(0.0, t + 2.35);
     o.start(t); lfo.start(t); o.stop(t + 2.5); lfo.stop(t + 2.5);
   }
   uguisu(x, y, z) {
@@ -416,9 +417,9 @@ export class AudioEngine {
     o.connect(g).connect(out);
     const F = o.frequency, A = g.gain;
     F.setValueAtTime(1100, t); F.linearRampToValueAtTime(1320, t + 1.3);
-    A.setValueAtTime(0, t); A.linearRampToValueAtTime(0.07, t + 0.35); A.setValueAtTime(0.07, t + 1.2); A.linearRampToValueAtTime(0, t + 1.35);
+    A.setValueAtTime(0, t); A.linearRampToValueAtTime(0.13, t + 0.35); A.setValueAtTime(0.13, t + 1.2); A.linearRampToValueAtTime(0, t + 1.35);
     const notes = [[1.5, 0.08, 2150, 2200], [1.62, 0.1, 2950, 2700], [1.78, 0.38, 2650, 2350]];
-    for (const [s, d, fa, fb] of notes) { F.setValueAtTime(fa, t + s); F.linearRampToValueAtTime(fb, t + s + d); A.setValueAtTime(0, t + s); A.linearRampToValueAtTime(0.08, t + s + 0.015); A.setValueAtTime(0.075, t + s + d * 0.7); A.linearRampToValueAtTime(0, t + s + d); }
+    for (const [s, d, fa, fb] of notes) { F.setValueAtTime(fa, t + s); F.linearRampToValueAtTime(fb, t + s + d); A.setValueAtTime(0, t + s); A.linearRampToValueAtTime(0.14, t + s + 0.015); A.setValueAtTime(0.13, t + s + d * 0.7); A.linearRampToValueAtTime(0, t + s + d); }
     o.start(t); o.stop(t + 2.3);
   }
   dog(x, y, z) {
@@ -441,7 +442,7 @@ export class AudioEngine {
         if (f0 * r > 16000) return;
         const o = this.osc('sine', f0 * r * rnd(0.998, 1.002)), g = this.gain(0);
         o.connect(g).connect(out);
-        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05 * a, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0002, t + d);
+        g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.1 * a, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0002, t + d);
         o.start(t); o.stop(t + d + 0.05);
       });
       t += rnd(0.12, 0.35);
@@ -460,7 +461,7 @@ export class AudioEngine {
   bell() {
     if (!this.ready) return;
     const t0 = this.ctx.currentTime + 0.01;
-    const P = [[2340, 0.09, 0.7], [3990, 0.05, 0.45], [5630, 0.03, 0.3], [7870, 0.012, 0.18]];
+    const P = [[2340, 0.16, 0.7], [3990, 0.09, 0.45], [5630, 0.05, 0.3], [7870, 0.02, 0.18]];
     for (const burst of [0, 0.36]) for (let k = 0; k < 8; k++) this.metal(t0 + burst + k * 0.032, P, this.sfx, Math.pow(0.82, k));
   }
   click() { if (!this.ready) return; this.metal(this.ctx.currentTime, [[3200, 0.04, 0.05]], this.sfx); }
@@ -480,7 +481,7 @@ export class AudioEngine {
   }
   step(surface, k = 0.6) {
     if (!this.ready) return;
-    const t = this.ctx.currentTime + 0.005, a = k * rnd(0.8, 1.1);
+    const t = this.ctx.currentTime + 0.005, a = k * rnd(0.8, 1.1) * 2.6;
     switch (surface) {
       case 'gravel': case 'dirt': for (let i = 0; i < 4; i++) this.burst(t + i * rnd(0.008, 0.02), rnd(1800, 3200), 0.9, 0.05, 0.07 * a); this.thump(t, 110, 60, 0.06, 0.06 * a); break;
       case 'grass': case 'tall': this.burst(t, 1100, 0.6, 0.12, 0.05 * a, this.sfx, 'lowpass'); this.burst(t + 0.02, 4200, 0.8, 0.08, 0.025 * a); break;
@@ -564,7 +565,7 @@ export class AudioEngine {
   crossingBell(x, y, z) {
     if (!this.ready) return;
     const out = this.spot(x, y, z, { ref: 9, roll: 1, rev: 0.25 });
-    this.metal(this.ctx.currentTime + 0.01, [[742, 0.11, 0.32], [1489, 0.05, 0.22], [2215, 0.03, 0.16], [2970, 0.015, 0.1]], out);
+    this.metal(this.ctx.currentTime + 0.01, [[742, 0.3, 0.32], [1489, 0.12, 0.22], [2215, 0.07, 0.16], [2970, 0.035, 0.1]], out);
   }
 
   purr(x, y, z) {
