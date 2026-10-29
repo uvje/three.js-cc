@@ -87,6 +87,11 @@ export class Environment {
     U.uWind.value.set(Math.cos(this.windAngle), 0.8 + 0.4 * n.noise(tSec * 0.02, 9.1), Math.sin(this.windAngle));
     U.uGust.value = this.gust;
     U.uTime.value = tSec;
+    // cloud shadows drift with the wind, only on fair days in sunlight
+    const csd = Math.min(0.1, Math.max(0, tSec - (this._csT ?? tSec))); this._csT = tSec;
+    const cs = U.uCloudSh.value;
+    cs.y -= Math.cos(this.windAngle) * csd * 0.022; cs.z -= Math.sin(this.windAngle) * csd * 0.022;
+    cs.x = 0.62 * time.dayLight * Math.max(0, 1 - cl * 1.6);
     U.uSunDir.value.copy(time.sunDir);
     U.uSunCol.value.copy(s.sun).multiplyScalar(time.sunI / 3.2);
     U.uFogSun.value.copy(s.haze);

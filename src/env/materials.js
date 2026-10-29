@@ -17,6 +17,7 @@ export const U = {
   uLamps: { value: 0 },
   uWet: { value: 0 },
   uFest: { value: 0 }, // glow of the shrine festival lights
+  uCloudSh: { value: new THREE.Vector3(0, 0, 0) }, // cloud shadows: strength, drift offset x, z
 };
 
 const FOG_PARS = /* glsl */`
@@ -24,6 +25,17 @@ varying vec3 vWPos;
 uniform vec3 uSunDir;
 uniform vec3 uFogSun;
 uniform vec3 uMist;
+uniform vec3 uCloudSh;
+float _csHash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+float _csNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(_csHash(i), _csHash(i + vec2(1.0, 0.0)), f.x), mix(_csHash(i + vec2(0.0, 1.0)), _csHash(i + vec2(1.0, 1.0)), f.x), f.y); }
+// shadows of summer clouds drifting over the valley: 1 in sunlight, less under a cloud
+float cloudShade(vec3 p) {
+  if (uCloudSh.x < 0.001) return 1.0;
+  vec2 q = p.xz * 0.0042 + uCloudSh.yz;
+  float n = _csNoise(q) * 0.62 + _csNoise(q * 2.07 + 3.7) * 0.28 + _csNoise(q * 4.3 + 7.1) * 0.1;
+  return 1.0 - smoothstep(0.5, 0.63, n) * uCloudSh.x;
+}
 `;
 export const FOG_APPLY = /* glsl */`
 #ifdef USE_FOG
@@ -74,7 +86,7 @@ export function patch(mat, o = {}) {
   const prev = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     sh.uniforms.uTime = U.uTime; sh.uniforms.uSunDir = U.uSunDir; sh.uniforms.uFogSun = U.uFogSun;
-    sh.uniforms.uMist = U.uMist; sh.uniforms.uWind = U.uWind; sh.uniforms.uGust = U.uGust; sh.uniforms.uWet = U.uWet;
+    sh.uniforms.uMist = U.uMist; sh.uniforms.uWind = U.uWind; sh.uniforms.uGust = U.uGust; sh.uniforms.uWet = U.uWet; sh.uniforms.uCloudSh = U.uCloudSh;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform float uTime;\nuniform vec3 uWind;\nuniform float uGust;\n')
       .replace('#include <project_vertex>', '#include <project_vertex>\n' + WPOS_VERT);
@@ -84,6 +96,7 @@ export function patch(mat, o = {}) {
     }
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + FOG_PARS + 'uniform float uWet;\n')
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n{ float _cs = cloudShade(vWPos); reflectedLight.directDiffuse *= _cs; reflectedLight.directSpecular *= _cs; }')
       .replace('#include <fog_fragment>', 'gl_FragColor.rgb *= 1.0 - uWet * 0.26;\n' + FOG_APPLY);
     if (o.frag) o.frag(sh);
     if (prev) prev(sh, r);

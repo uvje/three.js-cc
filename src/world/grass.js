@@ -125,7 +125,7 @@ function layerMaterial(kind, tex) {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vT;\nuniform vec3 uSunCol;')
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-          totalEmissiveRadiance += vColor.rgb * uSunCol * vT * (0.05 + 0.32 * pow(max(dot(normalize(vWPos - cameraPosition), uSunDir), 0.0), 3.0));`);
+          totalEmissiveRadiance += vColor.rgb * uSunCol * vT * (0.05 + 0.32 * pow(max(dot(normalize(vWPos - cameraPosition), uSunDir), 0.0), 3.0)) * cloudShade(vWPos);`);
     },
   });
   return { mat, shared };
