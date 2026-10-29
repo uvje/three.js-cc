@@ -22,6 +22,7 @@ import { Wildlife } from './world/wildlife.js';
 import { TouchControls } from './ui/touch.js';
 import { Insects } from './world/insects.js';
 import { Birds } from './world/birds.js';
+import { Held } from './player/held.js';
 
 // grandma's errands: a gentle first afternoon for someone new to the village
 const QUEST = [
@@ -136,6 +137,8 @@ class Game {
     const rv = this.world.plan.river, fq = rv.poly.nearest(330, 222, 60);
     this.fireworks = new Fireworks(this.scene, this.audio, { x: fq.x, y: rv.poly.sampleArray(rv.water, fq.s), z: fq.z });
     this.sparkler = new Sparkler(this.camera, this.scene, this.audio);
+    this.held = new Held(this.camera, this.scene, this.audio);
+    this.freeIce = store.get('freeIce', false);
     this.villagers = new Villagers(this.world, this.audio);
     this.traffic = new Traffic(this.world, this.audio);
     this.weather = new Weather(this.scene, this.audio);
@@ -258,7 +261,7 @@ class Game {
       this.addMoney(-130);
       this.audio.vending();
       const d = DRINKS[Math.floor(Math.random() * DRINKS.length)];
-      setTimeout(() => this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`), 1100);
+      setTimeout(() => { this.hud.toast(`${d.jp} — ${d.name}. Холодная банка в ладони.`); this.held.take('can', d); }, 1100);
       this.stamp('vending');
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
     else if (it.kind === 'stall') this.openModal('shop', it.stall);
@@ -310,9 +313,9 @@ class Game {
       store: {
         title: 'なつめ商店', sub: 'Дедушка откладывает газету и кивает. Под потолком лениво крутится вентилятор, по телевизору — школьный бейсбол.',
         items: [
-          { name: 'Рамунэ — газировка со стеклянным шариком', price: 100, msg: 'Щёлк! Шарик проваливается в горлышко. Шипит и пахнет лимонадом.' },
-          { name: 'Фруктовый лёд на палочке', price: 80, msg: 'Тает быстрее, чем успеваешь доесть.' },
-          { name: 'Какигори с клубничным сиропом', price: 200, msg: 'Голова чуть-чуть замёрзла. Это и есть лето.' },
+          { name: 'Рамунэ — газировка со стеклянным шариком', price: 100, hold: 'ramune', msg: 'Щёлк! Шарик проваливается в горлышко. Шипит и пахнет лимонадом.' },
+          { name: 'Фруктовый лёд на палочке', price: 80, hold: 'ice', msg: 'Тает быстрее, чем успеваешь доесть.' },
+          { name: 'Какигори с клубничным сиропом', price: 200, hold: 'kakigori', msg: 'Голова чуть-чуть замёрзла. Это и есть лето.' },
           { name: 'Горсть дагаси — мелких сладостей', price: 50, msg: 'Жевательная конфета, кислый порошок и крошечное печенье в форме рыбки.' },
           { name: 'Кукурузная палочка', price: 15, msg: 'Хрустит. Пальцы в сырной пудре.' },
           { name: 'Сэнко-ханаби — 5 бенгальских огней', price: 300, msg: 'Бабушка улыбается: «Только когда стемнеет». Нажми F ночью, чтобы зажечь.', sparklers: 5 },
@@ -324,29 +327,29 @@ class Game {
           { name: 'Хиясси тюка — холодная лапша', price: 650, msg: 'Ледяная лапша, огурец и кунжутная заправка. Идеально в жару.', meal: true },
           { name: 'Сёю-рамэн', price: 550, msg: 'Горячий бульон, хоть и жарко. Хозяйка добавила лишнее яйцо.', meal: true },
           { name: 'Карри-райс', price: 600, msg: 'Домашнее карри, как в школьной столовой.', meal: true },
-          { name: 'Какигори с зелёным чаем и бобами', price: 280, msg: 'Горьковато-сладко. Тает на языке.' },
+          { name: 'Какигори с зелёным чаем и бобами', price: 280, hold: 'kakigori', holdOpts: { color: 0x7aa84a }, msg: 'Горьковато-сладко. Тает на языке.' },
         ],
       },
       tako: {
         title: 'たこ焼き', sub: 'Хозяин ловко переворачивает шарики спицей. Шипит масло, пахнет соусом и бонито.',
         items: [
-          { name: 'Такояки — шесть шариков с осьминогом', price: 400, msg: 'Горячо-горячо! Внутри кусочек осьминога, сверху пляшет стружка бонито.', snack: true },
-          { name: 'Рамунэ из ведра со льдом', price: 150, msg: 'Ледяная бутылка, шарик звякает о стекло.' },
+          { name: 'Такояки — шесть шариков с осьминогом', price: 400, hold: 'tako', msg: 'Горячо-горячо! Внутри кусочек осьминога, сверху пляшет стружка бонито.', snack: true },
+          { name: 'Рамунэ из ведра со льдом', price: 150, hold: 'ramune', msg: 'Ледяная бутылка, шарик звякает о стекло.' },
         ],
       },
       wata: {
         title: 'わたあめ', sub: 'В гудящем барабане из сахарных ниточек вырастает розовое облако.',
         items: [
-          { name: 'Сахарная вата в пакете с героем мультика', price: 300, msg: 'Облако на палочке. Пальцы будут липкими до конца вечера.', snack: true },
+          { name: 'Сахарная вата в пакете с героем мультика', price: 300, hold: 'wata', msg: 'Облако на палочке. Пальцы будут липкими до конца вечера.', snack: true },
           { name: 'Яблоко в карамели', price: 350, msg: 'Хрустящая красная глазурь, а внутри — кислое яблочко.', snack: true },
         ],
       },
       kori: {
         title: 'かき氷', sub: 'Ручная машинка скрипит и сыплет ледяную стружку горкой.',
         items: [
-          { name: 'Какигори с клубничным сиропом', price: 250, msg: 'Сладко, холодно, голова чуть-чуть звенит.', snack: true },
-          { name: 'Какигори «мэрон» — дынный', price: 250, msg: 'Ярко-зелёный, как светлячок. Пахнет дыней.', snack: true },
-          { name: 'Какигори «блю гавайи»', price: 250, msg: 'Язык стал синим. Дети у соседнего лотка хохочут.', snack: true },
+          { name: 'Какигори с клубничным сиропом', price: 250, hold: 'kakigori', msg: 'Сладко, холодно, голова чуть-чуть звенит.', snack: true },
+          { name: 'Какигори «мэрон» — дынный', price: 250, hold: 'kakigori', holdOpts: { color: 0x6ad84a }, msg: 'Ярко-зелёный, как светлячок. Пахнет дыней.', snack: true },
+          { name: 'Какигори «блю гавайи»', price: 250, hold: 'kakigori', holdOpts: { color: 0x3aa8f0 }, msg: 'Язык стал синим. Дети у соседнего лотка хохочут.', snack: true },
         ],
       },
       kingyo: {
@@ -356,9 +359,13 @@ class Game {
     };
     const s = SH[kind];
     this.audio.shopChime();
-    const refresh = () => this.hud.openShop(s.title, s.sub, s.items, this.money, (it) => {
+    // a winning ice-pop stick buys one more
+    const items = () => s.items.map((it) => (it.hold === 'ice' && this.freeIce ? { ...it, price: 0, name: it.name + ' — по палочке «あたり»' } : it));
+    const refresh = () => this.hud.openShop(s.title, s.sub, items(), this.money, (it) => {
       if (this.money < it.price) return;
       this.addMoney(-it.price);
+      if (it.hold === 'ice' && it.price === 0) { this.freeIce = false; store.set('freeIce', false); }
+      if (it.hold) this.held.take(it.hold, it.holdOpts || {});
       if (it.kingyo) this.tryGoldfish();
       else this.hud.toast(it.msg);
       if (it.snack) this.audio.eat();
@@ -639,6 +646,11 @@ class Game {
       const pr = this.renderer.getPixelRatio(), hh = this.renderer.domElement.height / pr;
       this.fireworks.update(this.modal ? 0 : dt, this.camera.position, pr, hh);
       this.sparkler.update(this.modal ? 0 : dt, pr, hh);
+      const ate = this.held.update(this.modal ? 0 : dt, this.player.mode === 'bike' || this.sparkler.active || this.state !== 'play');
+      if (ate?.kind === 'ice') {
+        if (ate.atari) { this.freeIce = true; store.set('freeIce', true); this.hud.toast('На палочке написано «あたり» — выигрыш! В «Нацумэ сётэн» за неё дадут ещё одно мороженое.'); this.stamp('atari'); }
+        else this.hud.toast('На палочке ничего не написано. Ну и ладно, было вкусно.');
+      }
       this.villagers.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       this.traffic.update(this.modal ? 0 : dt, time, this.player);
       this.weather.update(this.modal ? 0 : dt, time, this.camera.position);

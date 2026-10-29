@@ -329,6 +329,7 @@ export class AudioEngine {
 
   // ---------------------------------------------------------------- creatures
   minmin(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { gain: 1, ref: 7, rev: 0.25 });
     const o = this.osc('sawtooth', 520);
@@ -352,6 +353,7 @@ export class AudioEngine {
     o.start(t0); lfo.start(t0); o.stop(ts + 1.7); lfo.stop(ts + 1.7);
   }
   aburazemi(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.05, dur = rnd(4, 9);
     const out = this.spot(x, y, z, { ref: 6, rev: 0.15 });
     const src = c.createBufferSource(); src.buffer = this.white; src.loop = true; src.playbackRate.value = rnd(0.9, 1.1);
@@ -365,6 +367,7 @@ export class AudioEngine {
   }
   // kumazemi: the big black cicada of summer mornings, a loud pulsing "shaa-shaa-shaa"
   kumazemi(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 7, rev: 0.2 });
     const src = c.createBufferSource(); src.buffer = this.white; src.loop = true; src.playbackRate.value = rnd(0.92, 1.08);
@@ -385,6 +388,7 @@ export class AudioEngine {
   }
   // tsukutsukuboshi: "jiii... o-shii tsuku-tsuku, o-shii tsuku-tsuku... ui-oosu, ui-oosu... jiii"
   tsukutsuku(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 7, rev: 0.3 });
     const o = this.osc('sawtooth', 390);
@@ -455,6 +459,8 @@ export class AudioEngine {
     this.thump(t, 300, 110, 0.08, 0.25, out);
     for (let i = 0; i < 6; i++) this.burst(t + 0.25 + Math.random() * 0.35, 2600 + Math.random() * 2400, 2, 0.05, 0.08 + Math.random() * 0.06, out);
   }
+  // a gulp from a bottle or a can
+  sip() { if (!this.ready) return; const t = this.ctx.currentTime; this.burst(t, 700, 1.2, 0.12, 0.12, this.sfx, 'lowpass'); this.thump(t + 0.08, 260, 160, 0.09, 0.14); this.thump(t + 0.32, 240, 150, 0.08, 0.1); }
   // camera shutter: two quick mechanical clicks
   shutter() { if (!this.ready) return; const t = this.ctx.currentTime; this.burst(t, 3200, 1.5, 0.03, 0.3); this.burst(t + 0.07, 2400, 1.5, 0.04, 0.25); this.thump(t + 0.07, 300, 120, 0.04, 0.15); }
   // a caught cicada tearing free: a few angry buzzes
@@ -472,6 +478,7 @@ export class AudioEngine {
     src.start(t, Math.random() * 2); lfo.start(t); src.stop(t + 0.7); lfo.stop(t + 0.7);
   }
   higurashi(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t0 = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 10, roll: 0.7, rev: 0.75 });
     const o = this.osc('sine', 4500), o2 = this.osc('sine', 9000);
@@ -495,6 +502,7 @@ export class AudioEngine {
     o.start(t0); o2.start(t0); ring.start(t0); const end = tp + 0.3; o.stop(end); o2.stop(end); ring.stop(end);
   }
   sparrow(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx; let t = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 5, rev: 0.1 });
     const n = Math.floor(rnd(2, 6));
@@ -509,6 +517,7 @@ export class AudioEngine {
     }
   }
   crow(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx; let t = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 18, roll: 0.8, rev: 0.5 });
     const n = Math.floor(rnd(2, 5));
@@ -526,6 +535,7 @@ export class AudioEngine {
     }
   }
   kite(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 30, roll: 0.6, rev: 0.6 });
     const o = this.osc('sine', 2600), g = this.gain(0);
@@ -539,6 +549,7 @@ export class AudioEngine {
     o.start(t); lfo.start(t); o.stop(t + 2.5); lfo.stop(t + 2.5);
   }
   uguisu(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx, t = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 20, roll: 0.7, rev: 0.6 });
     const o = this.osc('sine', 1150), g = this.gain(0);
@@ -551,6 +562,7 @@ export class AudioEngine {
     o.start(t); o.stop(t + 2.3);
   }
   dog(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx; let t = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 25, roll: 0.8, rev: 0.6 });
     for (let i = 0; i < Math.floor(rnd(2, 4)); i++) {
@@ -562,6 +574,7 @@ export class AudioEngine {
     }
   }
   furin(x, y, z) {
+    if (!this.ready) return;
     const c = this.ctx; let t = c.currentTime + 0.03;
     const out = this.spot(x, y, z, { ref: 3, roll: 1.2, rev: 0.35 });
     const f0 = rnd(2400, 3100);
