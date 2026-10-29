@@ -1,6 +1,7 @@
 import { hillDist } from '../world/terrain.js';
 import { F, THETA, CU, CV } from '../world/planner.js';
 import { BUGS } from '../world/insects.js';
+import { FISH } from '../world/fishing.js';
 
 // DOM HUD: clock, prompts, toasts, place titles, map, diary stamps, shop menus and the pause page.
 
@@ -39,6 +40,7 @@ export const STAMPS = [
   { id: 'toro', seal: '灯', ru: 'Проводить плывущие по реке фонарики' },
   { id: 'kabuto', seal: '甲', ru: 'Поймать жука-носорога' },
   { id: 'mushi', seal: '虫', ru: 'Собрать пять видов насекомых' },
+  { id: 'fish', seal: '釣', ru: 'Поймать рыбу в реке' },
 ];
 
 // A child's crayon drawing of the most memorable thing of the day.
@@ -168,12 +170,13 @@ export class HUD {
       d.append(c, l); s.appendChild(d);
     }
     this.el.diaryInfo.textContent = `Штампов: ${got.size} из ${STAMPS.length} · проехано ${(stats.ridden / 1000).toFixed(1)} км · день ${stats.day + 1}`;
-    // the bug collection
-    const b = document.getElementById('bugs');
-    if (b) {
+    // the bug and fish collections
+    for (const [el, list, have0] of [['bugs', BUGS, stats.bugs], ['fishes', FISH, stats.fish]]) {
+      const b = document.getElementById(el);
+      if (!b) continue;
       b.innerHTML = '';
-      for (const bug of BUGS) {
-        const have = stats.bugs?.has(bug.id);
+      for (const bug of list) {
+        const have = have0?.has(bug.id);
         const d = document.createElement('div');
         d.className = 'bug' + (have ? ' got' : '');
         const j = document.createElement('div'); j.className = 'jp'; j.textContent = have ? bug.jp : '？？？';

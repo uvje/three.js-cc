@@ -415,6 +415,10 @@ export class AudioEngine {
     g.linearRampToValueAtTime(A * 0.5, ts + 0.3); g.linearRampToValueAtTime(0, ts + 1.6);
     o.start(t0); lfo.start(t0); o.stop(ts + 1.7); lfo.stop(ts + 1.7);
   }
+  // fishing: the swish of the cast, the float plopping or being pulled under, the splash of a fish
+  fishCast(p) { if (!this.ready) return; const t = this.ctx.currentTime; const out = this.spot(p.x, p.y + 2, p.z, { ref: 6, sfx: true }); this.burst(t, 1800, 0.8, 0.35, 0.25, out); }
+  fishPlop(p, k = 0.5) { if (!this.ready) return; const t = this.ctx.currentTime + 0.02; const out = this.spot(p.x, p.y, p.z, { ref: 6, sfx: true }); this.thump(t, 520, 180, 0.12, 0.5 * k, out); this.burst(t, 900, 1.2, 0.12, 0.3 * k, out); }
+  fishSplash(p) { if (!this.ready) return; const t = this.ctx.currentTime; const out = this.spot(p.x, p.y, p.z, { ref: 6, sfx: true }); for (let i = 0; i < 5; i++) this.burst(t + i * 0.07 + Math.random() * 0.05, 700 + Math.random() * 900, 0.8, 0.2, 0.35, out, 'lowpass'); }
   // a caught cicada tearing free: a few angry buzzes
   cicadaEscape(x, y, z) {
     if (!this.ready) return;

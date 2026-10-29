@@ -224,7 +224,7 @@ class Game {
     this.modal = kind;
     this.input.exitLock(); this.input.clear();
     if (kind === 'map') { this.hud.drawMap(this.player); $('mapView').hidden = false; }
-    if (kind === 'diary') { this.hud.renderDiary(this.stamps, { ridden: this.player.ridden, day: this.env.time.day, bugs: new Set(store.get('bugs', [])) }); $('diaryView').hidden = false; }
+    if (kind === 'diary') { this.hud.renderDiary(this.stamps, { ridden: this.player.ridden, day: this.env.time.day, bugs: new Set(store.get('bugs', [])), fish: new Set(store.get('fish', [])) }); $('diaryView').hidden = false; }
     if (kind === 'shop') this.openShop(data);
   }
   closeModal() {
@@ -368,6 +368,12 @@ class Game {
     }
   }
   onSit(sp) {
+    if (sp.fish) {
+      this.world.fishing.start(sp);
+      this.player.pitch = -0.35;
+      this.hud.toast('Закидываешь удочку. Следи за поплавком: когда он нырнёт — жми E!');
+      return;
+    }
     if (sp.dance) {
       this.hud.toast('Ты встаёшь в круг между тётушкой с веером и мальчиком в синей юкате. Хлоп-хлоп, шаг, ещё шаг… (E — выйти из круга)');
       this.stamp('bon');
@@ -380,7 +386,7 @@ class Game {
     const h = this.env.time.hour;
     if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
   }
-  onStand() { this.env.time.boost = 1; }
+  onStand() { this.env.time.boost = 1; this.world.fishing.stop(); }
   sleep() {
     const t = this.env.time, h = t.hour;
     if (h > 5 && h < 18.5) { this.hud.toast('Спать ещё рано. Бабушка зовёт ужинать к семи.'); return; }
@@ -432,6 +438,15 @@ class Game {
     this.newDay();
     this.stamp('sleep');
     this.input.requestLock();
+  }
+  landFish(f) {
+    if (f.id === 'boot') { this.hud.toast(`${f.jp} — ${f.ru}. ${f.note}`); return; }
+    const got = new Set(store.get('fish', []));
+    const fresh = !got.has(f.id);
+    got.add(f.id); store.set('fish', [...got]);
+    this.hud.toast(`${f.jp} — ${f.ru}${fresh ? ' · новая в коллекции!' : ''} ${f.note} Отпускаешь обратно в реку.`);
+    this.today.bugs.push(f.acc);
+    this.stamp('fish');
   }
   newDay() { this.today = { events: new Set(), bugs: [], ridden0: this.player?.ridden || 0 }; }
   lightSparkler() {
@@ -563,7 +578,7 @@ class Game {
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
-      this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? (P.sit.dance ? 'Мышь — смотреть · E — выйти из круга' : 'Мышь — смотреть · T — быстрее время · E — встать') : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
+      this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? (P.sit.dance ? 'Мышь — смотреть · E — выйти из круга' : P.sit.fish ? 'Жди, пока поплавок нырнёт, и жми E · W — смотать удочку' : 'Мышь — смотреть · T — быстрее время · E — встать') : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
       this.checkTimer = (this.checkTimer || 0) + dt;
       if (this.checkTimer > 0.5) { this.checkTimer = 0; this.checks(); }
       this.timeEvents();
@@ -592,6 +607,9 @@ class Game {
       this.world.bon.update(this.modal ? 0 : dt, this.tSec, time, this.player, this.audio);
       this.world.toro.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
       this.insects.update(this.modal ? 0 : dt, time, this.camera.position);
+      const fished = this.world.fishing.update(this.modal ? 0 : dt, this.tSec, time, this.camera, this.input, this.audio);
+      if (fished) this.landFish(fished);
+      if (this.world.fishing.msg) { this.hud.toast(this.world.fishing.msg); this.world.fishing.msg = null; }
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

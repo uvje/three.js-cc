@@ -58,7 +58,8 @@ export class Player {
       this.updateBike(dt, time);
     } else if (this.mode === 'sit') {
       this.yaw -= mdx * sens; this.pitch = clamp(this.pitch - mdy * sens * inv, -1.2, 1.2);
-      if (inp.hit('KeyW') || inp.hit('KeyS') || inp.hit('KeyE') || inp.hit('Space') || Math.abs(inp.joyY) > 0.6) this.standUp();
+      const fishing = this.sit.fish && this.W.game?.world.fishing.holdsE;
+      if (inp.hit('KeyW') || inp.hit('KeyS') || (inp.hit('KeyE') && !fishing) || inp.hit('Space') || Math.abs(inp.joyY) > 0.6) this.standUp();
       this.eye.set(this.sit.x, this.sit.y + 1.18, this.sit.z);
     } else {
       this.yaw -= mdx * sens; this.pitch = clamp(this.pitch - mdy * sens * inv, -1.45, 1.45);
@@ -250,7 +251,12 @@ export class Player {
   findPrompt() {
     this.prompt = null;
     const W = this.W;
-    if (this.mode === 'sit') { this.prompt = { text: this.sit.dance ? 'Выйти из круга' : 'Встать', key: 'E', act: () => this.standUp() }; return; }
+    if (this.mode === 'sit') {
+      const f = this.sit.fish && this.W.game?.world.fishing;
+      if (f && (f.state === 'nibble' || f.state === 'bite')) { this.prompt = { text: 'Подсечь!', key: 'E', act: () => {} }; return; }
+      this.prompt = { text: this.sit.dance ? 'Выйти из круга' : f ? 'Смотать удочку' : 'Встать', key: 'E', act: () => this.standUp() };
+      return;
+    }
     if (this.mode === 'bike') { if (Math.abs(this.bike.speed) < 1.6) this.prompt = { text: 'Слезть с велосипеда', key: 'E', act: () => this.dismount() }; return; }
     const px = this.pos.x, pz = this.pos.z;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
