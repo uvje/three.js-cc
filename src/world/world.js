@@ -18,6 +18,7 @@ import { Home } from './home.js';
 import { RadioTaiso } from './taiso.js';
 import { BonOdori } from './bonodori.js';
 import { Toro } from './toro.js';
+import { updateCrowdShadows } from './npc.js';
 import { Fishing } from './fishing.js';
 
 // Builds the whole village and answers spatial queries (ground height, surfaces) for the player and the soundscape.
@@ -113,6 +114,8 @@ export class World {
     this.moths.update(pr, hgt);
     this.lightPool.update(cam, time);
     this.store?.update(dt, tSec, time, cam);
+    this.crowdT = (this.crowdT || 0) - dt;
+    if (this.crowdT <= 0) { this.crowdT = 0.3; updateCrowdShadows(cam); }
     for (const s of this.sunflowerMeshes || []) {
       const d = Math.hypot(s.x - cam.x, s.z - cam.z);
       s.mesh.visible = d < 330;

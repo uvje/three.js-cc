@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RNG } from '../core/noise.js';
+import { MeshBuilder, C } from '../core/builder.js';
 import { patch } from '../env/materials.js';
 import { CF } from './collision.js';
 
@@ -16,41 +17,60 @@ function box(w, h, d, color, y0 = 0) { const g = new THREE.BoxGeometry(w, h, d);
 function ball(r, color, sx = 1, sy = 1, sz = 1) { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), M(color)); m.scale.set(sx, sy, sz); m.castShadow = true; return m; }
 function cyl(r0, r1, h, color, seg = 8) { const g = new THREE.CylinderGeometry(r1, r0, h, seg); g.translate(0, h / 2, 0); const m = new THREE.Mesh(g, M(color)); m.castShadow = true; return m; }
 
-// A person rig. All limbs hang along -y from their joint groups.
+// A person rig. All limbs hang along -y from their joint groups; everything that moves together is one mesh with
+// vertex colours, so a figure costs eleven draw calls.
+const personMat = patch(new THREE.MeshLambertMaterial({ vertexColors: true }), { key: 'npc' });
+export const PEOPLE = [];
 export function person(o) {
   const s = o.scale || 1;
   const root = new THREE.Group();
   const body = new THREE.Group(); body.scale.setScalar(s); root.add(body);
+  const part = (group, fn) => { const b = new MeshBuilder(); fn(b); const m = new THREE.Mesh(b.build(), personMat); m.castShadow = true; group.add(m); return m; };
+  const bx = (b, w, h, d, color, y0 = 0, z0 = 0) => b.box(0, y0 - h / 2, z0, w, h, d, C(color));
+  const ball = (b, r, color, sx = 1, sy = 1, sz = 1, y = 0, z = 0) => b.blob(0, y, z, r * sx, r * sy, r * sz, C(color), null, 0, 1, 0.92);
   const pelvis = new THREE.Group(); pelvis.position.y = 0.92; body.add(pelvis);
-  pelvis.add(box(0.34, 0.2, 0.22, o.pants, 0.0));
+  part(pelvis, (b) => bx(b, 0.34, 0.2, 0.22, o.pants));
   const spine = new THREE.Group(); spine.position.y = 0.08; pelvis.add(spine);
-  spine.add(box(0.36, 0.52, 0.22, o.shirt, 0.26));
-  if (o.apron) spine.add(box(0.37, 0.42, 0.02, o.apron, 0.18).translateZ(0.115));
-  if (o.towel) spine.add(box(0.3, 0.06, 0.26, 0xf2f2ec, 0.5));
+  part(spine, (b) => {
+    bx(b, 0.36, 0.52, 0.22, o.shirt, 0.26);
+    if (o.apron) bx(b, 0.37, 0.42, 0.02, o.apron, 0.18, 0.115);
+    if (o.towel) bx(b, 0.3, 0.06, 0.26, 0xf2f2ec, 0.5);
+  });
   const neck = new THREE.Group(); neck.position.y = 0.55; spine.add(neck);
-  neck.add(ball(0.12, o.skin, 1, 1.1, 1).translateY(0.13));
-  if (o.hair) neck.add(ball(0.125, o.hair, 1.02, 0.95, 1.05).translateY(0.17).translateZ(-0.02));
-  if (o.bun) neck.add(ball(0.06, o.hair, 1, 1, 1).translateY(0.28).translateZ(-0.08));
-  if (o.straw) { neck.add(cyl(0.38, 0.38, 0.025, 0xd8c078, 14).translateY(0.24)); neck.add(cyl(0.16, 0.05, 0.16, 0xc8b068, 12).translateY(0.25)); }
-  if (o.cap) { neck.add(ball(0.13, o.cap, 1, 0.55, 1).translateY(0.24)); neck.add(box(0.2, 0.02, 0.14, o.cap, 0.21).translateZ(0.12)); }
-  const limb = (x, y, len, w, color, color2) => {
-    const j = new THREE.Group(); j.position.set(x, y, 0);
-    j.add(box(w, len, w, color, -len / 2));
+  part(neck, (b) => {
+    ball(b, 0.12, o.skin, 1, 1.1, 1, 0.13);
+    if (o.hair) ball(b, 0.125, o.hair, 1.02, 0.95, 1.05, 0.17, -0.02);
+    if (o.bun) ball(b, 0.06, o.hair, 1, 1, 1, 0.28, -0.08);
+    if (o.straw) { b.cyl(0, 0.24, 0, 0.38, 0.38, 0.025, 14, C(0xd8c078)); b.cyl(0, 0.25, 0, 0.16, 0.05, 0.16, 12, C(0xc8b068)); }
+    if (o.cap) { ball(b, 0.13, o.cap, 1, 0.55, 1, 0.24); bx(b, 0.2, 0.02, 0.14, o.cap, 0.21, 0.12); }
+  });
+  const limb = (parent, x, y, len, w, color, color2, extra) => {
+    const j = new THREE.Group(); j.position.set(x, y, 0); parent.add(j);
+    part(j, (b) => bx(b, w, len, w, color, -len / 2));
     const k = new THREE.Group(); k.position.y = -len; j.add(k);
-    k.add(box(w * 0.9, len, w * 0.9, color2, -len / 2));
+    part(k, (b) => { bx(b, w * 0.9, len, w * 0.9, color2, -len / 2); extra(b); });
     return [j, k];
   };
-  const [shL, elL] = limb(0.23, 0.5, 0.28, 0.09, o.shirt, o.sleeve ? o.shirt : o.skin);
-  const [shR, elR] = limb(-0.23, 0.5, 0.28, 0.09, o.shirt, o.sleeve ? o.shirt : o.skin);
-  spine.add(shL, shR);
-  elL.add(ball(0.05, o.skin).translateY(-0.3)); elR.add(ball(0.05, o.skin).translateY(-0.3));
-  const [hipL, knL] = limb(0.1, -0.05, 0.43, 0.12, o.pants, o.legs || o.pants);
-  const [hipR, knR] = limb(-0.1, -0.05, 0.43, 0.12, o.pants, o.legs || o.pants);
-  pelvis.add(hipL, hipR);
-  knL.add(box(0.11, 0.07, 0.24, o.shoes || 0x2a2a2a, -0.45).translateZ(0.05));
-  knR.add(box(0.11, 0.07, 0.24, o.shoes || 0x2a2a2a, -0.45).translateZ(0.05));
+  const hand = (b) => ball(b, 0.05, o.skin, 1, 1, 1, -0.3);
+  const shoe = (b) => bx(b, 0.11, 0.07, 0.24, o.shoes || 0x2a2a2a, -0.45, 0.05);
+  const fore = o.sleeve ? o.shirt : o.skin;
+  const [shL, elL] = limb(spine, 0.23, 0.5, 0.28, 0.09, o.shirt, fore, hand);
+  const [shR, elR] = limb(spine, -0.23, 0.5, 0.28, 0.09, o.shirt, fore, hand);
+  const [hipL, knL] = limb(pelvis, 0.1, -0.05, 0.43, 0.12, o.pants, o.legs || o.pants, shoe);
+  const [hipR, knR] = limb(pelvis, -0.1, -0.05, 0.43, 0.12, o.pants, o.legs || o.pants, shoe);
   root.userData = { body, pelvis, spine, neck, shL, elL, shR, elR, hipL, knL, hipR, knR, s };
+  PEOPLE.push(root);
   return root;
+}
+// Shadows only for figures close to the camera; further away nobody notices, and crowds stay cheap.
+export function updateCrowdShadows(cam, r = 24) {
+  for (const p of PEOPLE) {
+    if (!p.visible) continue;
+    const want = (p.position.x - cam.x) ** 2 + (p.position.z - cam.z) ** 2 < r * r;
+    if (p.userData.shadow === want) continue;
+    p.userData.shadow = want;
+    p.traverse((m) => { if (m.isMesh) m.castShadow = want; });
+  }
 }
 export function pose(p, name, t = 0) {
   const u = p.userData;
