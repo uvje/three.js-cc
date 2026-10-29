@@ -124,6 +124,11 @@ export class HUD {
     const t = time.clock();
     if (t !== this._t) { this._t = t; this.el.t.textContent = t; this.el.d.textContent = time.dateJP(); this.el.s.textContent = speedLabel; }
   }
+  quest(text) {
+    const q = document.querySelector('#clock .q');
+    q.hidden = !text;
+    if (text) q.querySelector('span').textContent = text;
+  }
   setMoney(v, note = '') {
     this.money = v;
     this.el.money.firstChild.textContent = '¥ ' + v.toLocaleString('ru-RU') + ' ';

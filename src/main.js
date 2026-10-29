@@ -23,6 +23,14 @@ import { TouchControls } from './ui/touch.js';
 import { Insects } from './world/insects.js';
 import { Birds } from './world/birds.js';
 
+// grandma's errands: a gentle first afternoon for someone new to the village
+const QUEST = [
+  { text: 'Купи рамунэ в «Нацумэ сётэн»', done: (g) => g.questFlags.ramune },
+  { text: 'Отвези рамунэ бабушке — дом 家 на карте (M)', done: (g) => Math.hypot(g.player.pos.x - g.home.lot.x, g.player.pos.z - g.home.lot.z) < 16, msg: 'Бабушка: «Ох, спасибо! Арбуз как раз остыл в колодце — садись на энгаву».' },
+  { text: 'Посиди на энгаве и съешь ломтик арбуза', done: (g) => g.stamps.has('melon'), msg: 'Бабушка: «Вечером на холме у святилища праздник. Сходи, там фонарики и такояки».' },
+  { text: 'Вечером сходи на праздник у святилища (⛩ на карте)', done: (g) => g.stamps.has('matsuri'), msg: 'Бабушкины поручения выполнены. Дальше — как хочешь: в дневнике (Tab) ещё много летних радостей.' },
+];
+
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -54,6 +62,8 @@ class Game {
     this.stamps = new Set(store.get('stamps', []));
     this.money = store.get('money', 2000);
     this.sparklers = store.get('sparklers', 0);
+    this.questI = store.get('quest', 0);
+    this.questFlags = store.get('questFlags', {});
     this.state = 'loading';
     this.tSec = 0;
     this.canvas = $('c');
@@ -159,6 +169,7 @@ class Game {
     this.state = 'play';
     this.hud.setMoney(this.money);
     this.hud.place({ jp: 'なつめ村', ru: 'Деревня Нацумэ · 15:30, август', seal: '夏' });
+    this.hud.quest(QUEST[this.questI]?.text);
     setTimeout(() => this.hud.toast('W — идти, E — сесть на велосипед. Он стоит справа от тебя.'), 1500);
     setTimeout(() => this.hud.toast('Бабушкин дом отмечен на карте (M) знаком 家 — там можно переночевать.'), 7000);
     this.canvas.focus();
@@ -351,6 +362,7 @@ class Game {
       if (kind === 'store') this.stamp('dagashi');
       if (SH[kind] && ['tako', 'wata', 'kori', 'kingyo'].includes(kind)) this.stamp('matsuri');
       if (it.sparklers) { this.sparklers += it.sparklers; store.set('sparklers', this.sparklers); }
+      if (it.name.startsWith('Рамунэ')) { this.questFlags.ramune = true; store.set('questFlags', this.questFlags); }
       if (it.meal) { this.audio.eat(); this.env.time.hour += 0.5; this.stamp('diner'); this.hud.toast('Пока ел, прошло полчаса.'); }
       refresh();
     });
@@ -515,6 +527,13 @@ class Game {
     if (this.weather.rain > 0.6) this.stamp('rain');
     if (h > 4.4 && h < 6.6 && U.uMist.value.x > 0.015) this.stamp('mist');
     if (W.festival.open && W.festival.near(P.pos)) this.stamp('matsuri');
+    // grandma's errands
+    const q = QUEST[this.questI];
+    if (q && q.done(this)) {
+      this.questI++; store.set('quest', this.questI);
+      if (q.msg) this.hud.toast(q.msg);
+      this.hud.quest(QUEST[this.questI]?.text);
+    }
     if (W.toro.glow > 0.5 && W.toro.nearest(P.pos) < 25) this.stamp('toro');
     store.set('ridden', Math.round(P.ridden));
   }
