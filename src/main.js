@@ -195,6 +195,7 @@ class Game {
       }
       if (this.state === 'play' && !this.modal) {
         if (e.code === 'KeyH') document.body.classList.toggle('hide-hud');
+        if (e.code === 'KeyP') this.photoWanted = true;
         if (e.code === 'KeyF') this.lightSparkler();
         if (e.code === 'BracketRight') { this.settings.timeIdx = Math.min(SPEEDS.length - 1, this.settings.timeIdx + 1); this.applyTimeSpeed(true); }
         if (e.code === 'BracketLeft') { this.settings.timeIdx = Math.max(0, this.settings.timeIdx - 1); this.applyTimeSpeed(true); }
@@ -584,6 +585,21 @@ class Game {
     }
   }
 
+  // P: save the current view as a PNG (read synchronously right after rendering, while the drawing buffer is intact)
+  takePhoto() {
+    const t = this.env.time, name = `natsume-${8}-${String(7 + t.day).padStart(2, '0')}-${t.clock().replace(':', '')}.png`;
+    let url;
+    try { url = this.canvas.toDataURL('image/png'); } catch (e) { url = null; }
+    if (!url || url.length < 2000) { this.hud.toast('Не получилось сохранить снимок'); return; }
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    this.audio.shutter?.();
+    const f = document.getElementById('flash');
+    if (f) { f.classList.remove('on'); void f.offsetWidth; f.classList.add('on'); }
+    this.hud.toast('Щёлк! Снимок на память сохранён.');
+  }
+
   // ---------------- loop
   frame(now) {
     const raw = (now - (this.last || now)) / 1000;
@@ -648,6 +664,7 @@ class Game {
       const r = this.renderer;
       r.autoClear = false; r.clear(); r.render(this.env.skyScene, this.camera); r.clearDepth(); r.render(this.scene, this.camera);
     } else { this.renderer.autoClear = true; this.composer.render(); }
+    if (this.photoWanted) { this.photoWanted = false; this.takePhoto(); }
     this.input.endFrame();
   }
   updateAudio(dt) {
@@ -671,6 +688,7 @@ class Game {
     this.audio.update(dt, {
       hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
       cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: !!(W.store?.inside(cam) || W.diner?.inside(cam)),
+      coil: Math.hypot(cam.x - this.home.smokeBase.x, cam.z - this.home.smokeBase.z) < 14,
       river: W.nearestRiver(cam.x, cam.z), hum: W.nearestHum(cam.x, cam.z),
       bike: { riding: P.mode === 'bike', speed: P.bike.speed, pedaling: P.bike.pedaling, braking: P.bike.braking, surface: P.surface },
       findTree: (r, rmin = 0) => { const a = W.forest.treesNear(cam.x, cam.z, r, tmp).filter((t) => (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2 > rmin * rmin); return a.length ? a[Math.floor(Math.random() * a.length)] : null; },

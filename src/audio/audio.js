@@ -262,6 +262,9 @@ export class AudioEngine {
     if (band(h, 9, 16, 0.5) > 0.1) sch('kite', 55, () => this.kite(cam.x + rnd(-120, 120), cam.y + rnd(50, 90), cam.z + rnd(-120, 120)));
     if (morning > 0.1) sch('uguisu', 22 / morning, () => { const tr = env.findTree(120, 40); if (tr) this.uguisu(tr.x, tr.y + 5, tr.z); });
     if (env.night > 0.8 && (h > 21 || h < 3)) sch('dog', 70, () => this.dog(cam.x + rnd(-200, 200), cam.y, cam.z + rnd(-200, 200)));
+    // mosquitoes find you in the grass on warm evenings, unless a mosquito coil is burning nearby
+    const bitey = env.night > 0.5 && !env.indoor && !env.coil && rain < 0.2 && (env.grass > 0.45 || env.paddy > 0.5) && (!env.bike.riding || Math.abs(env.bike.speed) < 1.5);
+    if (bitey) sch('mosq', 38, () => this.mosquito());
     // furin on gusts
     if (gust > 0.62) sch('furin', 2.2, () => { const f = env.findFurin(30); if (f) this.furin(f.x, f.y, f.z); });
     this.updateCrickets(env, cricket, t);
@@ -419,6 +422,32 @@ export class AudioEngine {
   fishCast(p) { if (!this.ready) return; const t = this.ctx.currentTime; const out = this.spot(p.x, p.y + 2, p.z, { ref: 6, sfx: true }); this.burst(t, 1800, 0.8, 0.35, 0.25, out); }
   fishPlop(p, k = 0.5) { if (!this.ready) return; const t = this.ctx.currentTime + 0.02; const out = this.spot(p.x, p.y, p.z, { ref: 6, sfx: true }); this.thump(t, 520, 180, 0.12, 0.5 * k, out); this.burst(t, 900, 1.2, 0.12, 0.3 * k, out); }
   fishSplash(p) { if (!this.ready) return; const t = this.ctx.currentTime; const out = this.spot(p.x, p.y, p.z, { ref: 6, sfx: true }); for (let i = 0; i < 5; i++) this.burst(t + i * 0.07 + Math.random() * 0.05, 700 + Math.random() * 900, 0.8, 0.2, 0.35, out, 'lowpass'); }
+  // a mosquito circling your head: a thin whine that swoops from ear to ear, louder as it comes close
+  mosquito() {
+    if (!this.ready) return;
+    const c = this.ctx, t0 = c.currentTime + 0.05, dur = rnd(3, 7);
+    const o = this.osc('sawtooth', 600), f = this.filt('bandpass', 1300, 0.9), hp = this.filt('highpass', 450, 0.7), g = this.gain(0);
+    const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+    o.connect(hp).connect(f).connect(g);
+    if (pan) g.connect(pan).connect(this.ambOut); else g.connect(this.ambOut);
+    // wingbeat jitter and a slow wander in pitch
+    const j = this.osc('sine', rnd(22, 30)), jg = this.gain(7); j.connect(jg).connect(o.frequency);
+    const base = rnd(560, 680);
+    o.frequency.setValueAtTime(base, t0);
+    let t = t0;
+    g.gain.setValueAtTime(0, t0);
+    while (t < t0 + dur) {
+      const seg = rnd(0.35, 0.9), near = Math.random();
+      o.frequency.linearRampToValueAtTime(base * (1 + (near - 0.4) * 0.08), t + seg);
+      g.gain.linearRampToValueAtTime(0.018 + near * near * 0.14, t + seg);
+      if (pan) pan.pan.linearRampToValueAtTime(rnd(-1, 1), t + seg);
+      t += seg;
+    }
+    g.gain.linearRampToValueAtTime(0, t + 0.6);
+    o.start(t0); j.start(t0); o.stop(t + 0.7); j.stop(t + 0.7);
+  }
+  // camera shutter: two quick mechanical clicks
+  shutter() { if (!this.ready) return; const t = this.ctx.currentTime; this.burst(t, 3200, 1.5, 0.03, 0.3); this.burst(t + 0.07, 2400, 1.5, 0.04, 0.25); this.thump(t + 0.07, 300, 120, 0.04, 0.15); }
   // a caught cicada tearing free: a few angry buzzes
   cicadaEscape(x, y, z) {
     if (!this.ready) return;
