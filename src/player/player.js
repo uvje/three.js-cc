@@ -250,7 +250,7 @@ export class Player {
   findPrompt() {
     this.prompt = null;
     const W = this.W;
-    if (this.mode === 'sit') { this.prompt = { text: 'Встать', key: 'E', act: () => this.standUp() }; return; }
+    if (this.mode === 'sit') { this.prompt = { text: this.sit.dance ? 'Выйти из круга' : 'Встать', key: 'E', act: () => this.standUp() }; return; }
     if (this.mode === 'bike') { if (Math.abs(this.bike.speed) < 1.6) this.prompt = { text: 'Слезть с велосипеда', key: 'E', act: () => this.dismount() }; return; }
     const px = this.pos.x, pz = this.pos.z;
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -266,7 +266,7 @@ export class Player {
     const b = this.bike;
     consider(b.x, b.z, 2.3, { text: 'Сесть на велосипед', key: 'E', act: () => this.mount() });
     for (const it of W.interact) if ((!it.when || it.when()) && Math.abs(it.x - px) < 4 && Math.abs(it.z - pz) < 4 && Math.abs(it.y - this.pos.y) < 2.5) consider(it.x, it.z, it.r, { text: it.label, key: 'E', act: () => W.game.interact(it) });
-    for (const sp of W.sitSpots) if (Math.abs(sp.x - px) < 3 && Math.abs(sp.z - pz) < 3 && Math.abs(sp.y - this.pos.y) < 2) consider(sp.x, sp.z, 1.6, { text: sp.label, key: 'E', act: () => this.sitDown(sp) });
+    for (const sp of W.sitSpots) if ((!sp.when || sp.when()) && Math.abs(sp.x - px) < 3 && Math.abs(sp.z - pz) < 3 && Math.abs(sp.y - this.pos.y) < 2) consider(sp.x, sp.z, 1.6, { text: sp.label, key: 'E', act: () => this.sitDown(sp) });
     this.prompt = best;
   }
   act() { if (this.prompt) this.prompt.act(); }

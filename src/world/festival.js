@@ -11,7 +11,7 @@ import { person, pose } from './npc.js';
 
 const START = 18.3, END = 23.6, MUSIC_END = 22.6;
 
-function lanternTex(red) {
+export function lanternTex(red) {
   const [c, x] = canvas(128, 128);
   x.fillStyle = red ? '#d8322a' : '#f4ecd8'; x.fillRect(0, 0, 128, 128);
   x.fillStyle = '#1a1a1a'; x.fillRect(0, 0, 128, 10); x.fillRect(0, 118, 128, 10);
@@ -41,6 +41,74 @@ function koriTex() {
   return tex(c, { clamp: true });
 }
 
+// Paper lanterns strung between posts: collects the wire segments and lantern positions, then builds them as one
+// line mesh and two instanced meshes (red and white lanterns alternate).
+export class LanternStrings {
+  constructor() { this.lanterns = [[], []]; this.wires = []; }
+  add(pts, every, h, sag) {
+    const { lanterns, wires } = this;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const ya = a[1] + h, yb = b[1] + h;
+      const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[2] - a[2]) / every));
+      const y = (t) => ya + (yb - ya) * t - sag * 4 * t * (1 - t);
+      for (let k = 0; k < 10; k++) {
+        const t0 = k / 10, t1 = (k + 1) / 10;
+        wires.push(a[0] + (b[0] - a[0]) * t0, y(t0), a[2] + (b[2] - a[2]) * t0, a[0] + (b[0] - a[0]) * t1, y(t1), a[2] + (b[2] - a[2]) * t1);
+      }
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        lanterns[(k + i) % 2].push([a[0] + (b[0] - a[0]) * t, y(t) - 0.4, a[2] + (b[2] - a[2]) * t]);
+        wires.push(a[0] + (b[0] - a[0]) * t, y(t), a[2] + (b[2] - a[2]) * t, a[0] + (b[0] - a[0]) * t, y(t) - 0.04, a[2] + (b[2] - a[2]) * t);
+      }
+    }
+  }
+  // returns the two lantern materials (red, white) so their glow can be driven by the caller
+  build(W) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.wires, 3));
+    g.computeBoundingSphere();
+    W.extras.push(new THREE.LineSegments(g, patch(new THREE.LineBasicMaterial({ color: 0x2a2420 }), { key: 'wire' })));
+    // bulging paper cylinders with black caps
+    const prof = [];
+    for (let i = 0; i <= 8; i++) { const t = i / 8; prof.push(new THREE.Vector2(0.1 + Math.sin(t * Math.PI) * 0.085, t * 0.38)); }
+    const lg = new THREE.LatheGeometry(prof, 12);
+    const mats = [true, false].map((red) => {
+      const t = lanternTex(red);
+      return patch(new THREE.MeshLambertMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0, side: THREE.DoubleSide }), { key: 'lantern' });
+    });
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
+    this.lanterns.forEach((list, k) => {
+      if (!list.length) return;
+      const im = new THREE.InstancedMesh(lg, mats[k], list.length);
+      list.forEach(([x, y, z], i) => im.setMatrixAt(i, m4.compose(p3.set(x, y, z), q.setFromAxisAngle(up, i * 0.7 + k), one)));
+      im.computeBoundingSphere();
+      im.castShadow = false;
+      W.extras.push(im);
+    });
+    return mats;
+  }
+  get all() { return [...this.lanterns[0], ...this.lanterns[1]]; }
+}
+
+const YUKATA = [[0x24305a, 0xe8b0c0], [0xf0ecf4, 0x3a3a8a], [0x6a2440, 0xf0d070], [0x2a5a50, 0xf4e8c8], [0xe8a8c0, 0x8a2a4a], [0x1a1a2a, 0xd84a3a], [0xf4f0e0, 0x2a6a9a], [0x3a3a6a, 0xf0c0d0]];
+// a festival-goer in yukata with an obi (kids get a big bow at the back); every third one carries a fan
+export function yukataPerson(i, kid) {
+  const [robe, obi] = YUKATA[i % YUKATA.length];
+  const pp = person({ skin: 0xe8c4a0, shirt: robe, pants: robe, legs: robe, hair: i % 4 === 3 ? 0x2a1a10 : 0x141414, bun: !kid && i % 2 === 0, sleeve: true, scale: kid ? 0.68 : 0.96, shoes: 0x9a7a52 });
+  const u = pp.userData;
+  const ob = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.25), new THREE.MeshLambertMaterial({ color: obi }));
+  ob.position.y = 0.08; u.spine.add(ob);
+  if (kid) { const bow = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.08), ob.material); bow.position.set(0, 0.1, -0.15); u.spine.add(bow); }
+  if (i % 3 === 0) {
+    const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.01, 12), new THREE.MeshLambertMaterial({ color: [0xf4f0e8, 0x7ab0e0, 0xf0a0b0][(i / 3) % 3] }));
+    fan.rotation.z = Math.PI / 2; fan.position.set(0, -0.36, 0.03); u.elR.add(fan);
+    u.fan = true;
+  }
+  pp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return pp;
+}
+
 export class Festival {
   constructor(W) {
     this.W = W;
@@ -50,26 +118,9 @@ export class Festival {
     this.signMats = [];
     this.bulbs = [];
     this.anim = [];
-    const lanterns = [[], []];
-    const wires = [];
+    const strings = new LanternStrings();
+    const string = (pts, every, h, sag) => strings.add(pts, every, h, sag);
     const posts = [];
-    const string = (pts, every, h, sag) => {
-      for (let i = 0; i < pts.length - 1; i++) {
-        const a = pts[i], b = pts[i + 1];
-        const ya = a[1] + h, yb = b[1] + h;
-        const n = Math.max(1, Math.round(Math.hypot(b[0] - a[0], b[2] - a[2]) / every));
-        const y = (t) => ya + (yb - ya) * t - sag * 4 * t * (1 - t);
-        for (let k = 0; k < 10; k++) {
-          const t0 = k / 10, t1 = (k + 1) / 10;
-          wires.push(a[0] + (b[0] - a[0]) * t0, y(t0), a[2] + (b[2] - a[2]) * t0, a[0] + (b[0] - a[0]) * t1, y(t1), a[2] + (b[2] - a[2]) * t1);
-        }
-        for (let k = 0; k < n; k++) {
-          const t = (k + 0.5) / n;
-          lanterns[(k + i) % 2].push([a[0] + (b[0] - a[0]) * t, y(t) - 0.4, a[2] + (b[2] - a[2]) * t]);
-          wires.push(a[0] + (b[0] - a[0]) * t, y(t), a[2] + (b[2] - a[2]) * t, a[0] + (b[0] - a[0]) * t, y(t) - 0.04, a[2] + (b[2] - a[2]) * t);
-        }
-      }
-    };
     const post = (x, z, h, y = W.hm.sample(x, z)) => {
       posts.push([x, y, z, h]);
       W.col.addCircle(x, z, 0.07);
@@ -108,28 +159,10 @@ export class Festival {
       P.cyl(0, 0, 0, 0.05, 0.04, h, 6, C(0x8a9a48));
       for (let k = 0.6; k < h; k += 0.55) P.cyl(0, k, 0, 0.056, 0.056, 0.03, 6, C(0x7a8a3e));
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(wires, 3));
-    g.computeBoundingSphere();
-    W.extras.push(new THREE.LineSegments(g, patch(new THREE.LineBasicMaterial({ color: 0x2a2420 }), { key: 'wire' })));
-    // lanterns: bulging paper cylinders with black caps
-    const prof = [];
-    for (let i = 0; i <= 8; i++) { const t = i / 8; prof.push(new THREE.Vector2(0.1 + Math.sin(t * Math.PI) * 0.085, t * 0.38)); }
-    const lg = new THREE.LatheGeometry(prof, 12);
-    this.lanternMats = [true, false].map((red) => {
-      const t = lanternTex(red);
-      return patch(new THREE.MeshLambertMaterial({ map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0, side: THREE.DoubleSide }), { key: 'lantern' });
-    });
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), up = new THREE.Vector3(0, 1, 0);
-    lanterns.forEach((list, k) => {
-      const im = new THREE.InstancedMesh(lg, this.lanternMats[k], list.length);
-      list.forEach(([x, y, z], i) => im.setMatrixAt(i, m4.compose(p3.set(x, y, z), q.setFromAxisAngle(up, i * 0.7 + k), one)));
-      im.computeBoundingSphere();
-      im.castShadow = false;
-      W.extras.push(im);
-    });
+    this.lanternMats = strings.build(W);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p3 = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
     // a warm light every few lanterns (only the nearest few are real lights at any moment)
-    [...lanterns[0], ...lanterns[1]].forEach(([x, y, z], i) => {
+    strings.all.forEach(([x, y, z], i) => {
       if (i % 4 === 0) W.lampSources.push({ x, y: y + 0.1, z, color: 0xff8a4a, power: 1, i: 2.6, dist: 7, festival: true });
     });
     // stalls (yatai) on both sides of the terrace, facing the approach
@@ -149,20 +182,8 @@ export class Festival {
     // visitors in yukata
     this.people = [];
     this.walkers = [];
-    const yk = [[0x24305a, 0xe8b0c0], [0xf0ecf4, 0x3a3a8a], [0x6a2440, 0xf0d070], [0x2a5a50, 0xf4e8c8], [0xe8a8c0, 0x8a2a4a], [0x1a1a2a, 0xd84a3a], [0xf4f0e0, 0x2a6a9a], [0x3a3a6a, 0xf0c0d0]];
     const dress = (i, kid) => {
-      const [robe, obi] = yk[i % yk.length];
-      const pp = person({ skin: 0xe8c4a0, shirt: robe, pants: robe, legs: robe, hair: i % 4 === 3 ? 0x2a1a10 : 0x141414, bun: !kid && i % 2 === 0, sleeve: true, scale: kid ? 0.68 : 0.96, shoes: 0x9a7a52 });
-      const u = pp.userData;
-      const ob = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.12, 0.25), new THREE.MeshLambertMaterial({ color: obi }));
-      ob.position.y = 0.08; u.spine.add(ob);
-      if (kid) { const bow = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.08), ob.material); bow.position.set(0, 0.1, -0.15); u.spine.add(bow); }
-      if (i % 3 === 0) {
-        const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.01, 12), new THREE.MeshLambertMaterial({ color: [0xf4f0e8, 0x7ab0e0, 0xf0a0b0][i % 3 === 0 ? (i / 3) % 3 : 0] }));
-        fan.rotation.z = Math.PI / 2; fan.position.set(0, -0.36, 0.03); u.elR.add(fan);
-        u.fan = true;
-      }
-      pp.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      const pp = yukataPerson(i, kid);
       pp.visible = false;
       W.scene.add(pp);
       this.people.push(pp);

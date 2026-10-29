@@ -878,26 +878,34 @@ export class AudioEngine {
     }
   }
   // ---------------------------------------------------------------- summer festival: taiko, kane, shinobue, crowd
-  festivalUpdate(music, pos, sizzlePos, on) {
-    if (!this.ready || (!this.fest && on < 0.01)) return;
+  // one player per place: the shrine festival ('shrine') and the bon dance on the school ground ('bon')
+  festivalUpdate(music, pos, sizzlePos, on, key = 'shrine') {
+    const fests = (this.fests ||= {});
+    if (!this.ready || (!fests[key] && on < 0.01)) return;
     const c = this.ctx, now = c.currentTime;
-    const F = this.fest || this.buildFestival(pos, sizzlePos);
+    const F = fests[key] || (fests[key] = this.buildFestival(pos, sizzlePos));
     F.out.gain.setTargetAtTime(music * 0.55, now, 0.6);
     F.crowd.gain.setTargetAtTime(on * 0.5, now, 0.8);
-    F.sizzle.gain.setTargetAtTime(on * 0.05, now, 0.8);
+    if (F.sizzle) F.sizzle.gain.setTargetAtTime(on * 0.05, now, 0.8);
     // from far away only the big drum carries
     const cam = this.lastCam;
     if (cam) F.lp.frequency.setTargetAtTime(Math.max(500, 9000 - Math.hypot(cam.x - pos.x, cam.z - pos.z) * 26), now, 0.3);
     // schedule ahead by more than the gap between frames, so slow frames don't leave holes in the music
     const look = Math.min(2, Math.max(0.3, 1.6 * (now - (F.lastCall ?? now))));
     F.lastCall = now;
-    if (music < 0.02) { F.next = now + 0.2; F.step = 0; return; }
-    if (F.next < now) F.next = now + 0.05;
+    if (music < 0.02) { F.next = now + 0.2; F.step = 0; F.t0 = F.next; return; }
+    if (F.next < now) { F.next = now + 0.05; F.t0 = F.next - F.step * F.dt; }
     while (F.next < now + look) { this.festStep(F, F.next); F.next += F.dt; F.step++; }
+  }
+  // beats (quarter notes) since the music started at this place, or null when it is not playing
+  festBeat(key) {
+    const F = this.fests?.[key];
+    if (!this.ready || !F || F.t0 === undefined || F.step === 0) return null;
+    return (this.ctx.currentTime - F.t0) / (F.dt * 4);
   }
   buildFestival(pos, sp) {
     const c = this.ctx;
-    const F = (this.fest = { dt: 60 / 108 / 4, step: 0, next: c.currentTime + 0.3, fue: new Map() });
+    const F = { dt: 60 / 108 / 4, step: 0, next: c.currentTime + 0.3, fue: new Map() };
     let e = 0;
     for (const [n, d] of FUE) { F.fue.set(e, [FUE_N[n], d]); e += d; }
     F.out = this.gain(0); F.lp = this.filt('lowpass', 8000, 0.5);
@@ -915,6 +923,7 @@ export class AudioEngine {
       const l1 = this.osc('sine', 2.6 + i * 0.73), g1 = this.gain(0.5); l1.connect(g1).connect(am.gain); l1.start();
       const l2 = this.osc('sine', 0.11 + i * 0.05), g2 = this.gain(0.4); l2.connect(g2).connect(am.gain); l2.start();
     }
+    if (!sp) return F;
     // the takoyaki griddle
     F.sizzle = this.gain(0);
     const sp2 = this.panner(sp.x, sp.y, sp.z, 2.5, 1.6);

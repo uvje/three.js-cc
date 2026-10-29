@@ -352,6 +352,11 @@ class Game {
     }
   }
   onSit(sp) {
+    if (sp.dance) {
+      this.hud.toast('Ты встаёшь в круг между тётушкой с веером и мальчиком в синей юкате. Хлоп-хлоп, шаг, ещё шаг… (E — выйти из круга)');
+      this.stamp('bon');
+      return;
+    }
     this.env.time.boost = 6;
     this.hud.toast('Время течёт медленно и лениво… Держи T, чтобы оно бежало быстрее.');
     if (sp.busStop) this.stamp('busstop');
@@ -459,6 +464,7 @@ class Game {
       for (let k = 0; k < 3; k++) this.audio.templeBell(600, 60, 520, k * 9);
       this.hud.toast('Где-то за холмами звонит храмовый колокол.');
     }
+    if (crossed(18.95)) this.hud.toast('На школьном дворе загорелись фонарики вокруг башни-ягуры: начинаются танцы бон-одори.');
     if (crossed(18.3)) this.hud.toast('На холме у святилища зажглись бумажные фонарики — начинается летний праздник, нацу-мацури.');
     if (crossed(22.2) && this.weather.cloud < 0.3) this.hud.toast('Этой ночью пик Персеид. Если долго смотреть в небо, можно поймать падающую звезду.');
     if (crossed(20) && !this.fireworks.show) {
@@ -500,11 +506,12 @@ class Game {
       this.watchPerformance(raw);
       const fest = this.world.festival;
       const ts = this.world.taiso;
-      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : ts.state === 'playing' && ts.near(P.pos) ? 0.15 : fest.open && fest.near(P.pos) ? 0.4 : P.mode === 'sit' ? 6 : 1;
+      const bon = this.world.bon;
+      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : ts.state === 'playing' && ts.near(P.pos) ? 0.15 : (fest.open && fest.near(P.pos)) || (bon.open && bon.near(P.pos)) ? 0.4 : P.mode === 'sit' && !P.sit.dance ? 6 : 1;
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
-      this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? 'Мышь — смотреть · T — быстрее время · E — встать' : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
+      this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? (P.sit.dance ? 'Мышь — смотреть · E — выйти из круга' : 'Мышь — смотреть · T — быстрее время · E — встать') : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
       this.checkTimer = (this.checkTimer || 0) + dt;
       if (this.checkTimer > 0.5) { this.checkTimer = 0; this.checks(); }
       this.timeEvents();
@@ -530,6 +537,7 @@ class Game {
       this.home.update(dt, this.tSec, time, this.camera.position);
       this.world.festival.update(this.modal ? 0 : dt, this.tSec, time, this.player);
       this.world.taiso.update(this.modal ? 0 : dt, this.tSec, time, this.player);
+      this.world.bon.update(this.modal ? 0 : dt, this.tSec, time, this.player, this.audio);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);
@@ -555,6 +563,8 @@ class Game {
     const tmp = [];
     const F = W.festival;
     this.audio.festivalUpdate(F.music, F.center, F.sizzlePos, F.on);
+    const B = W.bon;
+    this.audio.festivalUpdate(B.music, { x: B.cx, y: B.y0 + 3, z: B.cz }, null, B.on, 'bon');
     const st = W.store;
     if (st) this.audio.tvUpdate(Math.hypot(cam.x - st.tvPos.x, cam.z - st.tvPos.z) < 25 ? st.light : 0, st.tvPos);
     const hm = this.home;
