@@ -73,6 +73,7 @@ export function buildPoles(W) {
   lines.frustumCulled = false;
   W.scene.add(lines);
   W.poles = poles;
+  W.wires = wires;
 }
 
 function buildPole(W, p, rng, first) {

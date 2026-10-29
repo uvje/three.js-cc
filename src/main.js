@@ -21,6 +21,7 @@ import { Weather } from './env/weather.js';
 import { Wildlife } from './world/wildlife.js';
 import { TouchControls } from './ui/touch.js';
 import { Insects } from './world/insects.js';
+import { Birds } from './world/birds.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -131,6 +132,8 @@ class Game {
     this.env.sky.onMeteor = () => { if (this.state === 'play' && !this.modal) this.stamp('meteor'); };
     this.wildlife = new Wildlife(this.world, this.audio);
     this.insects = new Insects(this.world, this.audio);
+    this.birds = new Birds(this.world);
+    this.birds.audio = this.audio;
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -386,6 +389,7 @@ class Game {
     const h = this.env.time.hour;
     if (sp.label.includes('закат') || sp.label.includes('долину')) { if (h > 17.8 && h < 19.5) this.stamp('sunset'); }
   }
+  onBell() { this.birds.scare(this.player.pos, 18); }
   onStand() { this.env.time.boost = 1; this.world.fishing.stop(); }
   sleep() {
     const t = this.env.time, h = t.hour;
@@ -607,6 +611,7 @@ class Game {
       this.world.bon.update(this.modal ? 0 : dt, this.tSec, time, this.player, this.audio);
       this.world.toro.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
       this.insects.update(this.modal ? 0 : dt, time, this.camera.position);
+      this.birds.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
       const fished = this.world.fishing.update(this.modal ? 0 : dt, this.tSec, time, this.camera, this.input, this.audio);
       if (fished) this.landFish(fished);
       if (this.world.fishing.msg) { this.hud.toast(this.world.fishing.msg); this.world.fishing.msg = null; }

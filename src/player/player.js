@@ -66,7 +66,7 @@ export class Player {
       this.updateWalk(dt);
     }
     // actions
-    if (inp.hit('KeyR') || (inp.clicked && this.mode === 'bike')) this.audio.bell();
+    if (inp.hit('KeyR') || (inp.clicked && this.mode === 'bike')) { this.audio.bell(); this.W.game?.onBell?.(); }
     if (inp.hit('KeyL')) { this.bike.lampOn = !this.bike.lampOn; this.hud.toast(this.bike.lampOn ? 'Фара: включена' : 'Фара: выключена'); this.audio.click(); }
     if (inp.hit('KeyB')) this.callBike();
     this.findPrompt();
