@@ -91,7 +91,6 @@ export class BonOdori {
     // a place in the ring for the player
     this.spot = { x: cx, y: y0 + 0.42, z: cz + R, ang: 0, label: 'Встать в круг бон-одори', dance: true, when: () => this.on > 0.5 };
     W.sitSpots.push(this.spot);
-    W.landmarkIcons.push({ x: cx, z: cz, icon: '踊' });
     this.t = 0;
   }
   get open() { return this.on > 0.5; }

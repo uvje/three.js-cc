@@ -219,7 +219,6 @@ export class Festival {
     this.center = { x: T.wx(0, 12), y: S.topH + 1.5, z: T.wz(0, 12) };
     this.tako = this.stalls[0].L;
     this.sizzlePos = { x: this.tako.wx(0, 0.75), y: S.topH + 1.1, z: this.tako.wz(0, 0.75) };
-    W.landmarkIcons.push({ x: T.wx(0, 12), z: T.wz(0, 12), icon: '祭' });
   }
   stall(T, lx, lz, rot, name, col, kind) {
     const W = this.W, S = this.S;
