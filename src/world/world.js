@@ -114,6 +114,7 @@ export class World {
     this.moths.update(pr, hgt);
     this.lightPool.update(cam, time);
     this.store?.update(dt, tSec, time, cam);
+    this.diner?.update(dt, tSec, time, cam);
     this.crowdT = (this.crowdT || 0) - dt;
     if (this.crowdT <= 0) { this.crowdT = 0.3; updateCrowdShadows(cam); }
     for (const s of this.sunflowerMeshes || []) {

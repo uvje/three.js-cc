@@ -6,6 +6,7 @@ import { drawSign, canvas, tex, JP_SERIF, JP_SANS } from '../env/textures.js';
 import { patch } from '../env/materials.js';
 import { CF } from './collision.js';
 import { StoreInterior } from './store.js';
+import { DinerInterior } from './diner.js';
 
 // Houses (farmhouses with kura storehouses, Showa-era two-storey homes, small tin-roofed cottages) and the village shops.
 
@@ -414,18 +415,24 @@ function shopHouse(L, rng, o) {
   if (o.interior) {
     // a shop you can walk into: concrete floor, walls as panels around an open storefront
     H('concrete').box(0, 0, 0, sw + 0.1, 0.18, sd + 0.1, C(0xb4b0a8));
-    const t = 0.14, wh = 2.67, side = hw - gw / 2, Wl = H(o.wallKey || 'siding');
+    const t = 0.14, wh = 2.67, Wl = H(o.wallKey || 'siding');
+    const { door, doorX = 0, glass = true } = o.interior;
+    // the open part of the front: the whole glass storefront, or just the doorway
+    const o0 = glass ? -gw / 2 : doorX - door / 2, o1 = glass ? gw / 2 : doorX + door / 2;
     Wl.box(-hw + t / 2, 0.18, 0, t, wh, sd, wallC);
     Wl.box(hw - t / 2, 0.18, 0, t, wh, sd, wallC);
     Wl.box(0, 0.18, -hd + t / 2, sw - 2 * t, wh, t, wallC);
-    for (const sx of [-1, 1]) Wl.box(sx * (hw - side / 2), 0.18, hd - t / 2, side, wh, t, wallC);
-    Wl.box(0, 2.48, hd - t / 2, gw, wh - 2.3, t, wallC);
+    Wl.box((-hw + o0) / 2, 0.18, hd - t / 2, o0 + hw, wh, t, wallC);
+    Wl.box((o1 + hw) / 2, 0.18, hd - t / 2, hw - o1, wh, t, wallC);
+    Wl.box((o0 + o1) / 2, 2.48, hd - t / 2, o1 - o0, wh - 2.3, t, wallC);
     H(o.wallKey || 'siding').box(0, 2.85, 0, sw, (o.storeys === 1 ? 3.48 : 5.98) - 2.85, sd, wallC, { noTop: true });
     L.box(-hw + t / 2, hz, t / 2 + 0.04, hd);
     L.box(hw - t / 2, hz, t / 2 + 0.04, hd);
     L.box(0, hz - hd + t / 2, hw, t / 2 + 0.04);
-    for (const sx of [-1, 1]) L.box(sx * (hw - (hw - o.interior.door / 2) / 2), hz + hd - t / 2, (hw - o.interior.door / 2) / 2, t / 2 + 0.04);
-    L.box(0, hz + hd, o.interior.door / 2, 0.12, 0, CF.BIKE);
+    const d0 = doorX - door / 2, d1 = doorX + door / 2;
+    L.box((-hw + d0) / 2, hz + hd - t / 2, (d0 + hw) / 2, t / 2 + 0.04);
+    L.box((d1 + hw) / 2, hz + hd - t / 2, (hw - d1) / 2, t / 2 + 0.04);
+    L.box(doorX, hz + hd, door / 2, 0.12, 0, CF.BIKE);
     L.W.col.addPlatform(L.wx(0, hz), L.wz(0, hz), hw, hd, L.lot.ang, L.lot.h + 0.18, L.lot.h + 0.18, 'concrete');
   } else {
     H('plain').box(0, 0, 0, sw + 0.1, 0.18, sd + 0.1, C(0x9a968e));
@@ -517,7 +524,9 @@ const SHOPS = {
     MD.bench(L.at(-s.hw + 1.2, 0, s.fz + 0.6, 0), 0x7a7e86, 1.4);
   },
   diner(L, rng) {
-    const s = shopHouse(L, rng, { wallC: C(0x6a4a34), wallKey: 'wood', roofC: C(0x4a4e56), roofKey: 'kawara' });
+    const doorX = -(L.lot.w - 1.0) * 0.18;
+    const s = shopHouse(L, rng, { wallC: C(0x6a4a34), wallKey: 'wood', roofC: C(0x4a4e56), roofKey: 'kawara', interior: { door: 1.6, doorX, glass: false } });
+    L.W.diner = new DinerInterior(L, s, 1.6, doorX);
     L.sign('ふじ食堂', 0, 4.15, s.fz + 0.16, s.sw * 0.75, 0.9, { bg: '#2a1e16', fg: '#f4e8c8', border: '#c8a060', borderW: 6, glow: 0.6, sub: 'ラーメン・定食・かき氷' });
     // noren curtain
     const [c, x] = canvas(256, 128);
@@ -539,7 +548,6 @@ const SHOPS = {
     const sb = L.get('plain', s.hw - 0.6, 0, s.fz + 0.8);
     sb.box(0, 0, 0, 0.6, 0.06, 0.4, C(0x3a3a3a)); sb.box(0, 0.06, 0, 0.5, 1.1, 0.06, C(0x1a1a1a));
     L.box(s.hw - 0.6, s.fz + 0.8, 0.3, 0.2);
-    L.W.interact.push({ x: L.wx(-s.sw * 0.18, s.fz + 0.7), z: L.wz(-s.sw * 0.18, s.fz + 0.7), y: L.lot.h, r: 2.0, kind: 'shop', shop: 'diner', label: 'Зайти в столовую «Фудзи»' });
   },
   hardware(L, rng) {
     const s = shopHouse(L, rng, { wallC: C(0xc4beb0), roofC: C(0x7a5a48) });

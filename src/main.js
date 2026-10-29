@@ -274,6 +274,7 @@ class Game {
       if (r.bug.id === 'kabuto') this.stamp('kabuto');
       if (got.size >= 5) this.stamp('mushi');
     }
+    else if (it.kind === 'closedDiner') this.hud.toast('На двери табличка «準備中» — готовимся. Столовая открывается в 10:30.');
     else if (it.kind === 'closed') this.hud.toast('Двери заперты, внутри темно. Магазин откроется в 6:30.');
     else if (it.kind === 'melon') {
       this.audio.eat();
@@ -663,11 +664,13 @@ class Game {
     this.audio.festivalUpdate(B.music, { x: B.cx, y: B.y0 + 3, z: B.cz }, null, B.on, 'bon');
     const st = W.store;
     if (st) this.audio.tvUpdate(Math.hypot(cam.x - st.tvPos.x, cam.z - st.tvPos.z) < 25 ? st.light : 0, st.tvPos);
+    const dn = W.diner;
+    if (dn) this.audio.tvUpdate(Math.hypot(cam.x - dn.tvPos.x, cam.z - dn.tvPos.z) < 25 ? dn.light * 0.8 : 0, dn.tvPos, 'diner');
     const hm = this.home;
     if (hm?.tvPos) this.audio.tvUpdate(Math.hypot(cam.x - hm.tvPos.x, cam.z - hm.tvPos.z) < 25 ? hm.tvOn * 0.8 : 0, hm.tvPos, 'home');
     this.audio.update(dt, {
       hour: this.env.time.hour, gust: this.env.gust, night: this.env.time.night, rain: this.weather.rain, wet: this.weather.wet,
-      cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: !!W.store?.inside(cam),
+      cam, fwd, trees: e.trees, paddy: e.paddy, grass: e.grass, indoor: !!(W.store?.inside(cam) || W.diner?.inside(cam)),
       river: W.nearestRiver(cam.x, cam.z), hum: W.nearestHum(cam.x, cam.z),
       bike: { riding: P.mode === 'bike', speed: P.bike.speed, pedaling: P.bike.pedaling, braking: P.bike.braking, surface: P.surface },
       findTree: (r, rmin = 0) => { const a = W.forest.treesNear(cam.x, cam.z, r, tmp).filter((t) => (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2 > rmin * rmin); return a.length ? a[Math.floor(Math.random() * a.length)] : null; },
