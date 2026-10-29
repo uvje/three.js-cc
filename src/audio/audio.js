@@ -757,10 +757,11 @@ export class AudioEngine {
     const V = v.voice;
     if (!pos) { V.g.gain.setTargetAtTime(0, t, 0.3); V.tg.gain.setTargetAtTime(0, t, 0.3); return; }
     this.setPos(V.p, pos.x, pos.y, pos.z);
-    const bus = v.kind === 'bus';
-    V.o.frequency.setTargetAtTime((bus ? 36 : 52) + v.v * (bus ? 4 : 7.5), t, 0.3);
-    V.lfo.frequency.setTargetAtTime((bus ? 18 : 26) + v.v * 2, t, 0.3);
-    V.g.gain.setTargetAtTime((0.06 + v.v * 0.01) * (bus ? 1.5 : 1), t, 0.25);
+    const bus = v.kind === 'bus', cub = v.kind === 'cub';
+    // the Cub's little four-stroke putters high and light
+    V.o.frequency.setTargetAtTime(cub ? 95 + v.v * 14 : (bus ? 36 : 52) + v.v * (bus ? 4 : 7.5), t, 0.3);
+    V.lfo.frequency.setTargetAtTime(cub ? 12 + v.v * 1.4 : (bus ? 18 : 26) + v.v * 2, t, 0.3);
+    V.g.gain.setTargetAtTime((0.06 + v.v * 0.01) * (bus ? 1.5 : cub ? 0.7 : 1), t, 0.25);
     V.tg.gain.setTargetAtTime(v.v * 0.03, t, 0.25);
   }
   // the tofu seller's brass horn: a short low "puu", then a long "paa" that sags at the end

@@ -5,6 +5,7 @@ import { keiTruck } from './models.js';
 import { LIFT } from './roads.js';
 import { drawSign, JP_SANS } from '../env/textures.js';
 import { CF } from './collision.js';
+import { person, pose } from './npc.js';
 
 // Kei trucks, small cars and the village bus driving on the left along the prefectural road.
 
@@ -27,7 +28,7 @@ function buildModel(kind, color, M) {
       if (s > 0) W.quad([x, 1.06, 0.72], [x, 1.06, -1.2], [x, 1.56, -1.2], [x, 1.56, 0.55], w, [0, 0, 1, 1]);
       else W.quad([x, 1.06, -1.2], [x, 1.06, 0.72], [x, 1.56, 0.55], [x, 1.56, -1.2], w, [0, 0, 1, 1]);
     }
-  } else {
+  } else if (kind === 'bus') {
     const P = B.plain, W = B.winDark, body = C(0xf2f2ee), stripe = C(0x3a8ac8), dark = C(0x222428), w = C(0xffffff);
     P.box(0, 0.4, 0, 2.1, 2.5, 7.4, body);
     P.box(0, 0.75, 0, 2.12, 0.22, 7.42, stripe);
@@ -44,6 +45,25 @@ function buildModel(kind, color, M) {
     sign.position.set(0, 2.7, 3.72);
     extras.push(sign);
   }
+  if (kind === 'cub') {
+    // the postman's red Super Cub: step-through frame, leg shield, a red mail box on the carrier
+    const P = B.plain, red = C(0xc8241e), dark = C(0x1e1e20), chrome = C(0xb8bcc0), white = C(0xf0f0ec);
+    for (const z of [0.62, -0.58]) { P.push(); P.translate(0, 0.3, z); P.rotateZ(Math.PI / 2); P.cyl(0, -0.04, 0, 0.3, 0.3, 0.08, 14, dark, { cap: true }); P.cyl(0, -0.045, 0, 0.12, 0.12, 0.09, 10, chrome, { cap: true }); P.pop(); }
+    P.box(0, 0.32, 0.08, 0.16, 0.12, 0.9, red);
+    P.box(0, 0.4, -0.25, 0.26, 0.32, 0.55, red);
+    P.box(0, 0.44, 0.38, 0.34, 0.62, 0.08, white);
+    P.tube(0, 0.3, 0.62, 0, 1.0, 0.46, 0.022, 5, chrome);
+    P.box(0, 0.98, 0.46, 0.62, 0.04, 0.05, chrome);
+    P.box(0, 0.96, 0.52, 0.12, 0.12, 0.06, white);
+    P.box(0, 0.74, -0.25, 0.26, 0.08, 0.5, dark);
+    P.box(0, 0.72, -0.72, 0.42, 0.04, 0.36, chrome);
+    P.box(0, 0.76, -0.72, 0.46, 0.4, 0.42, red);
+    P.box(0, 0.7, 0.3, 0.3, 0.04, 0.3, chrome);
+    const t = drawSign('〒', { w: 128, h: 128, bg: '#c8241e', fg: '#ffffff', font: JP_SANS, weight: 900 });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.26), new THREE.MeshLambertMaterial({ map: t }));
+    sign.position.set(0, 0.96, -0.935); sign.rotation.y = Math.PI;
+    extras.push(sign);
+  }
   const g = new THREE.Group();
   const body = new THREE.Mesh(B.plain.build(), M.plain); body.castShadow = true; body.receiveShadow = true;
   g.add(body);
@@ -52,7 +72,7 @@ function buildModel(kind, color, M) {
   return g;
 }
 
-const SPEC = { kei: { len: 3.4, half: 1.75, w: 0.75, v: 11 }, car: { len: 3.4, half: 1.72, w: 0.75, v: 12 }, bus: { len: 7.4, half: 3.75, w: 1.08, v: 9.5 } };
+const SPEC = { kei: { len: 3.4, half: 1.75, w: 0.75, v: 11 }, car: { len: 3.4, half: 1.72, w: 0.75, v: 12 }, bus: { len: 7.4, half: 3.75, w: 1.08, v: 9.5 }, cub: { len: 1.8, half: 0.95, w: 0.35, v: 8 } };
 
 export class Traffic {
   constructor(W, audio) {
@@ -61,13 +81,28 @@ export class Traffic {
     const rng = (this.rng = new RNG(4040));
     this.headMat = new THREE.MeshBasicMaterial({ color: 0xfff4dc });
     this.tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
-    const defs = [['kei', 0xf2f2ee], ['kei', 0xf2f2ee], ['car', 0xb8dcc8], ['car', 0xe8dcc0], ['car', 0xc8d0dc], ['bus', 0xffffff]];
+    const defs = [['kei', 0xf2f2ee], ['kei', 0xf2f2ee], ['car', 0xb8dcc8], ['car', 0xe8dcc0], ['car', 0xc8d0dc], ['bus', 0xffffff], ['cub', 0xc8241e]];
     const L = this.road.poly.length;
     this.stops = W.sitSpots.filter((s) => s.busStop).map((s) => this.road.poly.nearest(s.x, s.z, 20).s);
+    // houses close to the road get mail
+    this.mailStops = W.plan.lots.filter((l) => !l.shop).map((l) => this.road.poly.nearest(l.x, l.z, 28)).filter(Boolean).map((q) => q.s).sort((a, b) => a - b).filter((s, i, a) => i === 0 || s - a[i - 1] > 25);
     this.vehicles = defs.map(([kind, color], i) => {
       const mesh = buildModel(kind, color, W.M);
       const sp = SPEC[kind];
-      for (const s of [-1, 1]) {
+      if (kind === 'cub') {
+        // the postman
+        const r = person({ skin: 0xd8b090, shirt: 0x4a5a7a, pants: 0x3a4660, legs: 0x3a4660, cap: 0xf0f0f0, sleeve: true, scale: 0.95, shoes: 0x1a1a1a });
+        pose(r, 'sit');
+        const u = r.userData;
+        u.pelvis.position.y = 0.36; u.hipL.rotation.x = u.hipR.rotation.x = -1.25; u.knL.rotation.x = u.knR.rotation.x = 1.35;
+        u.shL.rotation.set(-1.15, 0, 0.18); u.shR.rotation.set(-1.15, 0, -0.18); u.elL.rotation.x = u.elR.rotation.x = -0.35;
+        u.spine.rotation.x = 0.12;
+        r.position.set(0, 0.42, -0.3);
+        mesh.add(r);
+        const h = new THREE.Mesh(new THREE.CircleGeometry(0.07, 10), this.headMat); h.position.set(0, 0.96, 0.56); mesh.add(h);
+        const tl = new THREE.Mesh(new THREE.CircleGeometry(0.05, 8), this.tailMat); tl.position.set(0, 0.62, -0.94); tl.rotation.y = Math.PI; mesh.add(tl);
+      }
+      for (const s of kind === 'cub' ? [] : [-1, 1]) {
         const h = new THREE.Mesh(new THREE.CircleGeometry(kind === 'bus' ? 0.14 : 0.1, 10), this.headMat);
         h.position.set(s * (kind === 'bus' ? 0.75 : 0.55), kind === 'bus' ? 0.95 : 0.78, sp.half + 0.03);
         const t = new THREE.Mesh(new THREE.CircleGeometry(0.08, 8), this.tailMat);
@@ -94,6 +129,7 @@ export class Traffic {
   }
   active(h, v) {
     if (v.kind === 'bus') return h > 6.5 && h < 20.5;
+    if (v.kind === 'cub') return h > 8.8 && h < 16.5;
     return h > 5.5 && h < 23 ? true : v === this.vehicles[0];
   }
   update(dt, time, player) {
@@ -116,6 +152,15 @@ export class Traffic {
         v.hornT -= dt;
         if (v.hornT <= 0 && vil) { v.hornT = 7 + this.rng.float(0, 4); this.audio.tofuHorn?.(this.posOf(v)); }
       }
+      // the postman stops at houses along the road for a few seconds
+      if (v.kind === 'cub') {
+        for (const st of this.mailStops) {
+          const d = (st - v.s) * v.dir;
+          if (d > 0 && d < 12 && v.stopT <= 0 && v.lastStop !== st) target = Math.min(target, Math.max(0.5, d * 0.6));
+          if (Math.abs(st - v.s) < 0.8 && v.lastStop !== st) { v.stopT = 4 + this.rng.float(0, 3); v.lastStop = st; }
+        }
+        if (v.stopT > 0) { v.stopT -= dt; target = 0; }
+      }
       if (v.kind === 'bus') {
         for (const st of this.stops) {
           const d = (st - v.s) * v.dir;
@@ -125,7 +170,7 @@ export class Traffic {
         if (v.stopT > 0) { v.stopT -= dt; target = 0; }
       }
       // keep distance to the player and to other vehicles ahead in the same lane
-      const lane = -v.dir * (R.w / 4 + 0.1);
+      const lane = -v.dir * (v.kind === 'cub' ? R.w / 2 - 0.7 : R.w / 4 + 0.1);
       const fx = q.tx * v.dir, fz = q.tz * v.dir;
       const nx = -q.tz, nz = q.tx;
       const cx = q.x + nx * lane, cz = q.z + nz * lane;
