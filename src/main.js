@@ -138,6 +138,7 @@ class Game {
     const yaw = Math.atan2(-(q.x - sp.x), -(q.z - sp.z)) + 1.2;
     this.player.spawn(sp.x + (q.x - sp.x) * 0.55, sp.z + (q.z - sp.z) * 0.55, yaw);
     this.applyTimeSpeed();
+    this.newDay();
     this.renderer.compile(this.scene, this.camera);
     progress(1, 'Готово. Лето ждёт.');
     const b = $('startBtn'); b.disabled = false; b.textContent = 'Поехали'; b.focus();
@@ -255,6 +256,7 @@ class Game {
       got.add(r.bug.id); store.set('bugs', [...got]);
       this.audio.click();
       this.hud.toast(`${r.bug.jp} — ${r.bug.ru}${fresh ? ' · новая в коллекции!' : ''} ${r.bug.note}`);
+      this.today.bugs.push(r.bug.acc);
       if (r.bug.id === 'kabuto') this.stamp('kabuto');
       if (got.size >= 5) this.stamp('mushi');
     }
@@ -386,19 +388,52 @@ class Game {
     fade.classList.add('on');
     this.state = 'sleeping';
     this.input.clear();
+    this.input.exitLock();
     setTimeout(() => {
-      if (h >= 18.5) t.day++;
-      t.hour = 6.4; this.prevHour = 6.4;
-      const P = this.player, hp = this.home.homePos;
-      if (P.mode === 'sit') P.standUp();
-      P.pos.set(hp.x, this.world.groundAt(hp.x, hp.z).h, hp.z);
-      P.trans = 1;
-      this.state = 'play';
-      fade.classList.remove('on');
-      this.hud.toast('Доброе утро! Пахнет мисо-супом и мокрой от росы травой. Дети уже бегут к школе на утреннюю радиозарядку.');
-      this.stamp('sleep');
+      const date = t.dateJP().replace(/よる$/, 'はれ');
+      this.hud.showNightDiary(date, this.diaryText(), this.today.events, () => this.wakeUp(h));
     }, 1800);
   }
+  // the picture-diary entry for the day, in a child's voice
+  diaryText() {
+    const PH = {
+      vending: 'купил холодную банку в автомате', dagashi: 'купил сладостей у дедушки в «Нацумэ сётэн»', shrine: 'загадал желание в святилище на холме',
+      sunset: 'смотрел на закат со смотровой', chime: 'слушал вечернюю мелодию из громкоговорителя', fireflies: 'видел светлячков у реки',
+      night: 'катался ночью с фарой', mist: 'застал утренний туман', camphor: 'нашёл огромное камфорное дерево', sunflower: 'гулял среди подсолнухов',
+      river: 'сидел у реки', school: 'заглянул в пустую школу', diner: 'обедал в столовой «Фудзи»', station: 'встречал поезд на станции',
+      busstop: 'ждал автобус на остановке', melon: 'ел арбуз у бабушки', engawa: 'сидел вечером на энгаве', rain: 'попал под ливень',
+      cat: 'гладил кошку', hanabi: 'смотрел фейерверк над рекой', senko: 'зажигал бенгальские огни', matsuri: 'ходил на праздник у святилища',
+      kingyo: 'поймал золотую рыбку', meteor: 'видел падающую звезду', taiso: 'делал радиозарядку с ребятами', bon: 'танцевал бон-одори',
+      toro: 'провожал фонарики на реке', granny: 'болтал с бабушкой',
+    };
+    const did = [...this.today.events].filter((id) => PH[id]).map((id) => PH[id]);
+    const km = (this.player.ridden - this.today.ridden0) / 1000;
+    if (km > 0.3) did.push(`проехал на велосипеде ${km.toFixed(1).replace('.', ',')} км`);
+    const join = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' и ' + a[a.length - 1]);
+    const bugs = [...new Set(this.today.bugs)];
+    if (bugs.length) did.push(`поймал ${join(bugs)}`);
+    const tails = ['Цикады шумели весь день.', 'Бабушка сказала, что завтра будет ещё жарче.', 'Перед сном слышно, как квакают лягушки на рисовом поле.', 'Пахло травой и москитной спиралью.', 'Хочу, чтобы каникулы не кончались.', 'Завтра опять поеду куда-нибудь на велосипеде.'];
+    const tail = tails[(this.env.time.day + did.length) % tails.length];
+    if (!did.length) return 'Сегодня было очень жарко, и я почти ничего не делал. Слушал цикад и ел мороженое. Тоже хороший день. ' + tail;
+    return 'Сегодня я ' + join(did) + '. ' + tail;
+  }
+  wakeUp(h) {
+    const t = this.env.time;
+    if (h >= 18.5) t.day++;
+    t.hour = 6.4; this.prevHour = 6.4;
+    const P = this.player, hp = this.home.homePos;
+    if (P.mode === 'sit') P.standUp();
+    P.pos.set(hp.x, this.world.groundAt(hp.x, hp.z).h, hp.z);
+    P.yaw = this.home.lot.ang + Math.PI; P.pitch = 0; // out into the yard
+    P.trans = 1;
+    this.state = 'play';
+    document.getElementById('fade').classList.remove('on');
+    this.hud.toast('Доброе утро! Пахнет мисо-супом и мокрой от росы травой. Дети уже бегут к школе на утреннюю радиозарядку.');
+    this.newDay();
+    this.stamp('sleep');
+    this.input.requestLock();
+  }
+  newDay() { this.today = { events: new Set(), bugs: [], ridden0: this.player?.ridden || 0 }; }
   lightSparkler() {
     if (this.sparkler.active) return;
     if (this.sparklers <= 0) { this.hud.toast('Бенгальских огней нет — их продают в «Нацумэ сётэн»'); return; }
@@ -422,6 +457,7 @@ class Game {
   }
   addMoney(v) { this.money += v; this.hud.setMoney(this.money); store.set('money', this.money); }
   stamp(id) {
+    this.today?.events.add(id);
     if (this.stamps.has(id)) return;
     this.stamps.add(id);
     store.set('stamps', [...this.stamps]);

@@ -41,6 +41,69 @@ export const STAMPS = [
   { id: 'mushi', seal: '虫', ru: 'Собрать пять видов насекомых' },
 ];
 
+// A child's crayon drawing of the most memorable thing of the day.
+function drawPicture(cv, ev) {
+  const x = cv.getContext('2d'), W = cv.width, H = cv.height;
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const crayon = (pts, color, w = 5, close = false) => {
+    x.strokeStyle = color; x.lineCap = 'round'; x.lineJoin = 'round';
+    for (let pass = 0; pass < 3; pass++) {
+      x.lineWidth = w * (0.6 + rnd() * 0.5); x.globalAlpha = 0.55 + rnd() * 0.3;
+      x.beginPath();
+      pts.forEach(([px, py], i) => { const jx = px + (rnd() - 0.5) * 3, jy = py + (rnd() - 0.5) * 3; i ? x.lineTo(jx, jy) : x.moveTo(jx, jy); });
+      if (close) x.closePath();
+      x.stroke();
+    }
+    x.globalAlpha = 1;
+  };
+  const scribble = (cx, cy, rx, ry, color) => {
+    x.strokeStyle = color; x.lineWidth = 4; x.globalAlpha = 0.6;
+    for (let i = 0; i < rx * ry / 40; i++) {
+      const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd());
+      const px = cx + Math.cos(a) * rx * r, py = cy + Math.sin(a) * ry * r;
+      x.beginPath(); x.moveTo(px - 6, py + 3); x.lineTo(px + 6, py - 3); x.stroke();
+    }
+    x.globalAlpha = 1;
+  };
+  const circle = (cx, cy, r, n = 24) => Array.from({ length: n + 1 }, (_, i) => [cx + Math.cos((i / n) * Math.PI * 2) * r, cy + Math.sin((i / n) * Math.PI * 2) * r]);
+  const night = ['hanabi', 'toro', 'bon', 'matsuri', 'meteor', 'fireflies', 'senko', 'kabuto'].some((k) => ev.has(k));
+  x.fillStyle = '#fffdf6'; x.fillRect(0, 0, W, H);
+  // sky and ground
+  scribble(W / 2, 80, W * 0.55, 90, night ? '#1a2a6a' : '#7cc0f0');
+  scribble(W / 2, 250, W * 0.55, 60, '#5aa83a');
+  if (night) { scribble(470, 60, 26, 26, '#f0e070'); crayon(circle(470, 60, 26), '#d8b830', 4); for (let i = 0; i < 14; i++) { const sx = rnd() * W, sy = rnd() * 120; crayon([[sx - 4, sy], [sx + 4, sy]], '#fff8b0', 3); crayon([[sx, sy - 4], [sx, sy + 4]], '#fff8b0', 3); } }
+  else { scribble(470, 60, 34, 34, '#f8b020'); crayon(circle(470, 60, 34), '#e87010', 5); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; crayon([[470 + Math.cos(a) * 44, 60 + Math.sin(a) * 44], [470 + Math.cos(a) * 60, 60 + Math.sin(a) * 60]], '#e87010', 4); } }
+  if (ev.has('rain')) for (let i = 0; i < 40; i++) { const rx = rnd() * W, ry = rnd() * 200; crayon([[rx, ry], [rx - 6, ry + 18]], '#4a7ad8', 3); }
+  if (ev.has('hanabi')) for (const [cx, cy, col] of [[150, 80, '#f04a6a'], [290, 60, '#f0c030'], [380, 110, '#5ad0f0']]) for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; crayon([[cx + Math.cos(a) * 12, cy + Math.sin(a) * 12], [cx + Math.cos(a) * 46, cy + Math.sin(a) * 46]], col, 4); }
+  if (ev.has('toro') || ev.has('bon') || ev.has('matsuri')) {
+    crayon([[20, 150], [W / 2, 175], [W - 20, 150]], '#3a2a1a', 3);
+    for (let i = 0; i < 9; i++) { const lx = 50 + i * 58, ly = 162 + Math.sin((i / 8) * Math.PI) * 14; scribble(lx, ly + 16, 13, 17, i % 2 ? '#f4ecd8' : '#e8402a'); crayon(circle(lx, ly + 16, 14, 16), '#8a2a1a', 3); }
+  }
+  // the main subject in front
+  if (ev.has('kabuto') || ev.has('mushi')) {
+    scribble(280, 240, 70, 34, '#5a2a14'); crayon(circle(280, 240, 72, 30).map(([a, b]) => [a, 240 + (b - 240) * 0.48]), '#2a1408', 5);
+    crayon([[340, 230], [400, 190], [392, 178]], '#2a1408', 6);
+    for (const s of [-1, 1]) for (let i = 0; i < 3; i++) crayon([[240 + i * 40, 240 + s * 30], [230 + i * 40, 240 + s * 52]], '#2a1408', 4);
+  } else if (ev.has('melon')) {
+    x.fillStyle = '#e83a3a'; x.beginPath(); x.moveTo(170, 260); x.arc(280, 260, 110, Math.PI, 0); x.fill();
+    crayon(circle(280, 260, 110, 30).slice(15), '#2e7a2a', 10);
+    for (let i = 0; i < 9; i++) { const a = Math.PI + 0.3 + i * 0.3; x.fillStyle = '#1a1a1a'; x.fillRect(280 + Math.cos(a) * 60, 255 + Math.sin(a) * 50, 6, 9); }
+  } else if (!night) {
+    // a sunflower taller than me
+    crayon([[120, 300], [128, 150]], '#3a8a2a', 8);
+    scribble(128, 130, 30, 30, '#5a3010');
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; scribble(128 + Math.cos(a) * 44, 130 + Math.sin(a) * 44, 13, 13, '#f8c818'); }
+  }
+  // and me, a stick figure in a straw hat
+  const mx = 430, my = 220;
+  crayon(circle(mx, my - 40, 14, 14), '#3a2a1a', 4);
+  crayon([[mx - 26, my - 52], [mx + 26, my - 52]], '#c8a040', 7);
+  crayon([[mx, my - 26], [mx, my + 20]], '#3a2a1a', 4);
+  crayon([[mx - 20, my - 8], [mx, my - 16], [mx + 20, my - 8]], '#3a2a1a', 4);
+  crayon([[mx - 14, my + 50], [mx, my + 20], [mx + 14, my + 50]], '#3a2a1a', 4);
+}
+
 export class HUD {
   constructor() {
     this.el = {
@@ -118,6 +181,18 @@ export class HUD {
         d.append(j, r); b.appendChild(d);
       }
     }
+  }
+
+  // ---------------- picture diary page shown at bedtime: a crayon drawing of the day and a few lines
+  showNightDiary(date, text, ev, onClose) {
+    $('nightDate').textContent = date;
+    $('nightText').textContent = text;
+    drawPicture($('nightPic'), ev);
+    $('nightView').hidden = false;
+    const btn = $('nightBtn');
+    const done = () => { btn.removeEventListener('click', done); $('nightView').hidden = true; onClose(); };
+    btn.addEventListener('click', done);
+    btn.focus();
   }
 
   // ---------------- shop

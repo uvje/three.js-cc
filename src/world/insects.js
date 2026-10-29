@@ -5,13 +5,13 @@ import * as THREE from 'three';
 // Up to five are about near the player at a time; caught ones go into the collection in the diary.
 
 export const BUGS = [
-  { id: 'abura', jp: 'アブラゼミ', ru: 'Абурадзэми', note: 'Самая шумная цикада лета: шипит, как масло на сковородке.', hours: [[7.5, 17.5]], w: 5, kind: 'cicada', body: 0x5a3a22, wing: 0x7a5432, wo: 1, song: 'aburazemi' },
-  { id: 'minmin', jp: 'ミンミンゼミ', ru: 'Минминдзэми', note: 'Зелёно-чёрная, с прозрачными крыльями. Поёт «мин-мин-мин-мии».', hours: [[8.5, 15.8]], w: 3, kind: 'cicada', body: 0x2e4a32, wing: 0xd0e4ea, wo: 0.4, song: 'minmin' },
-  { id: 'higurashi', jp: 'ヒグラシ', ru: 'Хигураси', note: 'Поёт на рассвете и в сумерках: «кана-кана-кана». Самая печальная песня лета.', hours: [[4.5, 6.8], [17.2, 19.6]], w: 4, kind: 'cicada', body: 0x6a5a30, wing: 0xdae8e0, wo: 0.4, song: 'higurashi' },
-  { id: 'kumazemi', jp: 'クマゼミ', ru: 'Кумадзэми', note: 'Большая чёрная цикада, кричит по утрам «ся-ся-ся».', hours: [[6, 10.6]], w: 3, kind: 'cicada', body: 0x161616, wing: 0xd0dde4, wo: 0.4, song: 'kumazemi', big: true },
-  { id: 'kabuto', jp: 'カブトムシ', ru: 'Жук-носорог', note: 'Король летних каникул. Любит сок дуба и арбузные корки.', hours: [[19.5, 24], [0, 6.2]], w: 3, kind: 'kabuto', body: 0x3a1c10 },
-  { id: 'kuwagata', jp: 'ノコギリクワガタ', ru: 'Жук-олень', note: 'Челюсти как пила. Цепляется так, что не оторвать.', hours: [[20.5, 24], [0, 5]], w: 1.4, kind: 'kuwa', body: 0x24120a },
-  { id: 'nukegara', jp: 'セミの抜け殻', ru: 'Шкурка цикады', note: 'Пустая оболочка личинки. Кто-то этим утром стал цикадой.', hours: [[0, 24]], w: 1.6, kind: 'shell', body: 0xa86a2a },
+  { id: 'abura', acc: 'абурадзэми', jp: 'アブラゼミ', ru: 'Абурадзэми', note: 'Самая шумная цикада лета: шипит, как масло на сковородке.', hours: [[7.5, 17.5]], w: 5, kind: 'cicada', body: 0x5a3a22, wing: 0x7a5432, wo: 1, song: 'aburazemi' },
+  { id: 'minmin', acc: 'минминдзэми', jp: 'ミンミンゼミ', ru: 'Минминдзэми', note: 'Зелёно-чёрная, с прозрачными крыльями. Поёт «мин-мин-мин-мии».', hours: [[8.5, 15.8]], w: 3, kind: 'cicada', body: 0x2e4a32, wing: 0xd0e4ea, wo: 0.4, song: 'minmin' },
+  { id: 'higurashi', acc: 'хигураси', jp: 'ヒグラシ', ru: 'Хигураси', note: 'Поёт на рассвете и в сумерках: «кана-кана-кана». Самая печальная песня лета.', hours: [[4.5, 6.8], [17.2, 19.6]], w: 4, kind: 'cicada', body: 0x6a5a30, wing: 0xdae8e0, wo: 0.4, song: 'higurashi' },
+  { id: 'kumazemi', acc: 'кумадзэми', jp: 'クマゼミ', ru: 'Кумадзэми', note: 'Большая чёрная цикада, кричит по утрам «ся-ся-ся».', hours: [[6, 10.6]], w: 3, kind: 'cicada', body: 0x161616, wing: 0xd0dde4, wo: 0.4, song: 'kumazemi', big: true },
+  { id: 'kabuto', acc: 'жука-носорога', jp: 'カブトムシ', ru: 'Жук-носорог', note: 'Король летних каникул. Любит сок дуба и арбузные корки.', hours: [[19.5, 24], [0, 6.2]], w: 3, kind: 'kabuto', body: 0x3a1c10 },
+  { id: 'kuwagata', acc: 'жука-оленя', jp: 'ノコギリクワガタ', ru: 'Жук-олень', note: 'Челюсти как пила. Цепляется так, что не оторвать.', hours: [[20.5, 24], [0, 5]], w: 1.4, kind: 'kuwa', body: 0x24120a },
+  { id: 'nukegara', acc: 'шкурку цикады', jp: 'セミの抜け殻', ru: 'Шкурка цикады', note: 'Пустая оболочка личинки. Кто-то этим утром стал цикадой.', hours: [[0, 24]], w: 1.6, kind: 'shell', body: 0xa86a2a },
 ];
 const TRUNK = { sugi: 0.27, broad: 0.32, pine: 0.2, sakura: 0.24, kaki: 0.17, maple: 0.12 };
 const inHours = (b, h) => b.hours.some(([a, c]) => h >= a && h < c);
