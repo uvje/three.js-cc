@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Деревня Нацумэ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Old+Mincho:wght@600;900&display=swap">
+<style>
+/* Layout: full-bleed WebGL canvas; HUD pinned to the corners; menus are pages of a summer-vacation notebook (genkō yōshi grid). */
+:root {
+  --ink: #1d2830;
+  --ink-soft: #4a5a63;
+  --paper: #f2f5ee;
+  --grid: #a9cdc4;
+  --shu: #cf3a2c;
+  --ramune: #7cc8dc;
+  --night: #0e1530;
+  --hud: #fffdf6;
+  --hud-dim: rgba(255, 253, 246, .72);
+  --hud-shadow: rgba(8, 16, 24, .6);
+  --veil: rgba(9, 16, 30, .55);
+  --font-ui: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-jp: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", "IPAMincho", "Noto Serif JP", serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--night); color: var(--hud); font-family: var(--font-ui); }
+body { -webkit-user-select: none; user-select: none; }
+[hidden] { display: none !important; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+.hud { position: fixed; pointer-events: none; text-shadow: 0 1px 3px var(--hud-shadow), 0 0 12px var(--hud-shadow); }
+#clock { top: calc(14px + env(safe-area-inset-top, 0px)); left: calc(18px + env(safe-area-inset-left, 0px)); line-height: 1.1; }
+#clock .t { font-size: 34px; font-weight: 800; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+#clock .d { font-family: var(--font-jp); font-size: 15px; font-weight: 600; opacity: .92; margin-top: 2px; }
+#clock .s { font-size: 12px; color: var(--hud-dim); margin-top: 3px; }
+#clock .q { margin-top: 10px; max-width: 290px; font-size: 13.5px; font-weight: 700; line-height: 1.4; display: flex; gap: 8px; align-items: baseline; }
+#clock .q b { font-family: var(--font-jp); font-size: 12px; color: var(--hud); border: 1.5px solid var(--hud); border-radius: 4px; padding: 0 4px; flex: none; }
+#money { top: calc(16px + env(safe-area-inset-top, 0px)); right: calc(20px + env(safe-area-inset-right, 0px)); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+#money small { display: block; font-size: 12px; font-weight: 500; color: var(--hud-dim); margin-top: 3px; }
+#place { top: 90px; right: calc(26px + env(safe-area-inset-right, 0px)); display: flex; flex-direction: row-reverse; align-items: flex-start; gap: 10px; opacity: 0; transition: opacity 1.6s ease; }
+#place.show { opacity: 1; }
+#place .jp { writing-mode: vertical-rl; font-family: var(--font-jp); font-weight: 900; font-size: 34px; letter-spacing: .12em; line-height: 1; }
+#place .ru { writing-mode: vertical-rl; font-size: 13px; font-weight: 500; color: var(--hud-dim); letter-spacing: .06em; padding-top: 6px; }
+#place .seal { writing-mode: horizontal-tb; width: 26px; height: 26px; margin-top: 8px; border: 2px solid var(--shu); color: var(--shu); border-radius: 4px; font-family: var(--font-jp); font-weight: 900; font-size: 15px; display: grid; place-items: center; text-shadow: none; background: rgba(255, 250, 240, .85); transform: rotate(-6deg); }
+#prompt { left: 50%; bottom: calc(26% + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); font-size: 17px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(12, 22, 30, .38); white-space: nowrap; opacity: 0; transition: opacity .2s; }
+#prompt.show { opacity: 1; }
+#prompt kbd, .keys kbd { font-family: var(--font-ui); font-weight: 800; display: inline-block; min-width: 1.6em; padding: 1px 6px; margin-right: 6px; border-radius: 6px; background: var(--hud); color: var(--ink); text-shadow: none; text-align: center; }
+#toasts { left: 50%; top: calc(18px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.toast { font-size: 15px; font-weight: 700; padding: 6px 14px; border-radius: 10px; background: rgba(12, 22, 30, .45); animation: toast 4.2s ease forwards; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(-6px) } 8% { opacity: 1; transform: none } 85% { opacity: 1 } 100% { opacity: 0 } }
+#speed { right: calc(22px + env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; opacity: 0; transition: opacity .4s; }
+#speed small { font-size: 13px; font-weight: 500; color: var(--hud-dim); margin-left: 4px; }
+#speed.show { opacity: 1; }
+#fade { position: fixed; inset: 0; background: #05070c; opacity: 0; pointer-events: none; transition: opacity 1.4s ease; }
+#fade.on { opacity: 1; }
+#flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#flash.on { animation: flash .5s ease-out; }
+@keyframes flash { 0% { opacity: .8 } 100% { opacity: 0 } }
+#dot { left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--hud); opacity: .55; }
+#hint { left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); font-size: 12.5px; color: var(--hud-dim); line-height: 1.6; }
+body.hide-hud .hud { display: none; }
+
+/* touch controls: only after the first touch */
+#touch { display: none; }
+body.touch #touch { display: block; }
+body.touch #hint { display: none; }
+#touch .joy { position: fixed; width: 116px; height: 116px; margin: -58px 0 0 -58px; border-radius: 50%; background: rgba(255, 253, 246, .12); box-shadow: inset 0 0 0 2px rgba(255, 253, 246, .45); pointer-events: none; }
+#touch .knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 253, 246, .55); transform: translate(-50%, -50%); }
+#touch .btns { position: fixed; right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(64px + env(safe-area-inset-bottom, 0px)); width: 164px; display: flex; flex-direction: row-reverse; flex-wrap: wrap-reverse; align-items: flex-end; gap: 10px; }
+#touch .tbtn { width: 48px; height: 48px; border-radius: 50%; border: 0; font: 800 17px var(--font-ui); color: var(--ink); background: rgba(255, 253, 246, .62); box-shadow: 0 2px 8px rgba(8, 16, 24, .35); touch-action: none; -webkit-tap-highlight-color: transparent; }
+#touch .tbtn.big { width: 72px; height: 72px; font-size: 24px; background: rgba(255, 253, 246, .8); }
+#touch .tbtn.on { background: var(--ramune); }
+
+/* notebook pages */
+.overlay { position: fixed; inset: 0; display: grid; place-items: center; background: var(--veil); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px; overflow-y: auto; }
+.page { position: relative; color: var(--ink); background-color: var(--paper); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 26px 26px; background-position: -1px -1px; border-radius: 6px; box-shadow: 0 20px 60px rgba(0, 0, 0, .45); padding: 28px 30px; max-width: min(720px, 100%); width: 100%; box-sizing: border-box; }
+.page::before { content: ""; position: absolute; inset: 0; border-radius: 6px; background: linear-gradient(rgba(242, 245, 238, .84), rgba(242, 245, 238, .84)); pointer-events: none; }
+.page > * { position: relative; }
+.page h2 { font-family: var(--font-jp); font-weight: 900; font-size: 26px; margin: 0 0 4px; text-wrap: balance; }
+.page h3 { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft); margin: 18px 0 8px; }
+.page p { line-height: 1.6; margin: 0 0 10px; max-width: 62ch; }
+.btn { font: 700 16px var(--font-ui); color: var(--paper); background: var(--ink); border: 0; border-radius: 999px; padding: 11px 26px; cursor: pointer; }
+.btn:hover { background: #2c3c46; }
+.btn:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--ramune); outline-offset: 2px; }
+.btn.ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.btn:disabled { opacity: .5; cursor: progress; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+
+/* title */
+#title { background: radial-gradient(ellipse at 30% 40%, rgba(255, 190, 120, .16), transparent 60%), linear-gradient(rgba(10, 18, 34, .25), rgba(10, 18, 34, .7)); }
+#title .wrap { display: flex; gap: 34px; align-items: stretch; max-width: 820px; width: 100%; }
+#title .name { writing-mode: vertical-rl; font-family: var(--font-jp); font-weight: 900; font-size: clamp(64px, 11vw, 120px); letter-spacing: .08em; line-height: 1; color: var(--hud); text-shadow: 0 4px 30px rgba(0, 0, 0, .45); display: flex; align-items: center; gap: 14px; }
+#title .name .seal { writing-mode: horizontal-tb; font-size: 28px; width: 46px; height: 46px; display: grid; place-items: center; border: 3px solid var(--shu); border-radius: 6px; color: var(--shu); background: rgba(255, 248, 238, .9); transform: rotate(-5deg); text-shadow: none; }
+#title .page { flex: 1; min-width: 0; }
+#title .page h2 { font-family: var(--font-ui); font-weight: 800; font-size: 30px; }
+#title .sub { color: var(--ink-soft); font-size: 14px; margin-bottom: 16px; }
+.keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 18px; font-size: 14px; margin: 6px 0 18px; }
+.keys div { min-width: 0; }
+.keys kbd { background: var(--ink); color: var(--paper); font-size: 12.5px; }
+.load { height: 6px; border-radius: 3px; background: rgba(29, 40, 48, .15); overflow: hidden; margin: 4px 0 14px; }
+.load i { display: block; height: 100%; width: 0; background: var(--shu); transition: width .2s; }
+#loadText { font-size: 13px; color: var(--ink-soft); min-height: 1.2em; }
+
+/* pause / settings */
+.settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 22px; }
+.settings label { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-weight: 700; min-width: 0; }
+.settings label.check { flex-direction: row; align-items: center; gap: 8px; }
+.settings input[type=range] { width: 100%; accent-color: var(--shu); }
+.settings select { font: 500 14px var(--font-ui); padding: 5px 8px; border-radius: 8px; border: 1px solid var(--ink-soft); background: var(--paper); color: var(--ink); }
+.settings output { font-weight: 500; color: var(--ink-soft); }
+
+/* map */
+#mapPage { max-width: min(1000px, 100%); padding: 18px; }
+#mapCanvas { width: 100%; height: auto; display: block; border-radius: 4px; max-width: 100%; }
+#mapPage .legend { font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+
+/* shop menu */
+#shopList { display: grid; gap: 8px; margin: 12px 0; }
+#shopList button { display: flex; justify-content: space-between; gap: 12px; align-items: center; font: 700 15px var(--font-ui); color: var(--ink); background: rgba(255, 255, 255, .7); border: 2px solid var(--ink); border-radius: 10px; padding: 10px 14px; cursor: pointer; text-align: left; }
+#shopList button:hover { background: #fff; }
+#shopList button span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+#shopList button:disabled { opacity: .45; cursor: default; }
+
+/* stamp card */
+#stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+.stamp { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 12.5px; min-width: 0; }
+.stamp .c { width: 62px; height: 62px; border-radius: 50%; border: 2px dashed var(--ink-soft); display: grid; place-items: center; font-family: var(--font-jp); font-weight: 900; font-size: 24px; color: transparent; }
+.stamp.got .c { border: 3px solid var(--shu); color: var(--shu); transform: rotate(-8deg); background: rgba(207, 58, 44, .07); }
+.stamp .lbl { color: var(--ink-soft); }
+.stamp.got .lbl { color: var(--ink); font-weight: 700; }
+.enikki canvas { display: block; max-width: 100%; max-height: 36vh; width: auto; height: auto; margin-inline: auto; border: 2px solid var(--ink); border-radius: 4px; background: #fff; margin: 10px 0 14px; }
+.enikki #nightText { font-size: 17px; line-height: 2; background-image: linear-gradient(transparent calc(2em - 1px), rgba(29, 40, 48, .25) 1px); background-size: 100% 2em; }
+#nightView { background: rgba(5, 7, 12, .7); place-items: safe center; }
+#bugs, #fishes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.bug { border: 2px dashed var(--ink-soft); border-radius: 8px; padding: 6px 10px; background: rgba(255, 255, 255, .45); }
+.bug .jp { font-family: var(--font-jp); font-weight: 900; font-size: 15px; color: var(--ink-soft); }
+.bug .ru { font-size: 12px; color: var(--ink-soft); }
+.bug.got { border: 2px solid var(--ink); background: rgba(255, 255, 255, .8); }
+.bug.got .jp, .bug.got .ru { color: var(--ink); }
+@media (max-width: 640px) { #title .wrap { flex-direction: column; align-items: center; } #title .name { writing-mode: horizontal-tb; } }
+@media (prefers-reduced-motion: reduce) { .toast { animation-duration: .01s; } #place { transition: none; } }
+</style>
+<script type="importmap">{ "imports": { "three": "./lib/three/three.module.js", "three/addons/": "./lib/three/addons/" } }</script>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+
+<div id="clock" class="hud" hidden><div class="t">15:30</div><div class="d">8月7日（水）はれ</div><div class="s"></div><div class="q" hidden><b>用事</b><span></span></div></div>
+<div id="money" class="hud" hidden>¥ 1 500<small></small></div>
+<div id="place" class="hud"><div class="jp"></div><div class="ru"></div><div class="seal">夏</div></div>
+<div id="prompt" class="hud"></div>
+<div id="toasts" class="hud"></div>
+<div id="speed" class="hud">0<small>км/ч</small></div>
+<div id="dot" class="hud" hidden></div>
+<div id="hint" class="hud" hidden></div>
+<div id="fade"></div>
+<div id="flash"></div>
+
+<div id="title" class="overlay">
+  <div class="wrap">
+    <div class="name">なつめ村<span class="seal">夏</span></div>
+    <div class="page">
+      <h2>Деревня Нацумэ</h2>
+      <div class="sub">夏休み · летние каникулы в японской глубинке</div>
+      <p>Август, каникулы у бабушки. Звенят цикады, над рисовыми полями гудят провода, у магазинчика светится автомат с холодным чаем. Садись на велосипед и катайся, пока не стемнеет. А вечером — праздник у святилища, бон-одори на школьном дворе и фейерверк над рекой. В дневнике (Tab) — летние радости, которые стоит успеть.</p>
+      <div class="keys">
+        <div><kbd>W A S D</kbd>идти / крутить педали, руль</div>
+        <div><kbd>Мышь</kbd>смотреть по сторонам</div>
+        <div><kbd>E</kbd>сесть на велосипед, действие</div>
+        <div><kbd>Shift</kbd>бежать / налечь на педали</div>
+        <div><kbd>ЛКМ</kbd><kbd>R</kbd>звонок велосипеда</div>
+        <div><kbd>M</kbd>карта · <kbd>Tab</kbd>дневник</div>
+        <div><kbd>T</kbd>(держать) ускорить время</div>
+        <div><kbd>Esc</kbd>пауза и настройки</div>
+        <div><kbd>P</kbd>фото на память · <kbd>H</kbd>скрыть интерфейс</div>
+        <div>На телефоне — джойстик и кнопки на экране</div>
+      </div>
+      <div class="load"><i id="loadBar"></i></div>
+      <div class="row"><button id="startBtn" class="btn" disabled>Строим деревню…</button><span id="loadText"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="pause" class="overlay" hidden>
+  <div class="page">
+    <h2>一休み · Передышка</h2>
+    <p class="sub" id="pauseInfo"></p>
+    <div class="settings">
+      <label for="setTime">Скорость времени <output id="setTimeOut"></output><input id="setTime" type="range" min="0" max="6" step="1" value="3"></label>
+      <label for="setHour">Перевести часы <output id="setHourOut"></output><input id="setHour" type="range" min="0" max="23.75" step="0.25" value="15.5"></label>
+      <label for="setSens">Чувствительность мыши <output id="setSensOut"></output><input id="setSens" type="range" min="0.3" max="2.5" step="0.05" value="1"></label>
+      <label for="setVol">Громкость <output id="setVolOut"></output><input id="setVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+      <label for="setAmb">Природа и цикады <output id="setAmbOut"></output><input id="setAmb" type="range" min="0" max="1.5" step="0.05" value="1"></label>
+      <label for="setQuality">Качество графики<select id="setQuality"><option value="low">Низкое (слабые ноутбуки)</option><option value="medium">Среднее</option><option value="high">Высокое</option></select></label>
+      <label class="check" for="setInvert"><input id="setInvert" type="checkbox"> Инвертировать ось Y</label>
+      <label class="check" for="setMouseSteer"><input id="setMouseSteer" type="checkbox"> Руль следует за взглядом</label>
+    </div>
+    <h3>Управление</h3>
+    <div class="keys">
+      <div><kbd>W A S D</kbd>движение, на велосипеде W — педали, S — тормоз</div>
+      <div><kbd>E</kbd>сесть/слезть, купить, присесть на скамейку</div>
+      <div><kbd>R</kbd>звонок · <kbd>L</kbd>фара</div>
+      <div><kbd>Space</kbd>прыжок (пешком)</div>
+      <div><kbd>T</kbd>держать — время летит</div>
+      <div><kbd>[</kbd><kbd>]</kbd>скорость времени</div>
+      <div><kbd>M</kbd>карта · <kbd>Tab</kbd>дневник</div>
+      <div><kbd>H</kbd>скрыть интерфейс · <kbd>B</kbd>позвать велосипед</div>
+      <div><kbd>F</kbd>зажечь бенгальский огонь (ночью)</div>
+      <div><kbd>P</kbd>фото на память</div>
+    </div>
+    <div class="row"><button id="resumeBtn" class="btn">Продолжить</button><button id="resetBtn" class="btn ghost">Начать лето заново</button></div>
+  </div>
+</div>
+
+<div id="mapView" class="overlay" hidden>
+  <div class="page" id="mapPage">
+    <canvas id="mapCanvas" width="1400" height="820"></canvas>
+    <div class="legend">⛩ святилище · 文 школа · 〒 почта · ▣ станция · ● автоматы · красная стрелка — ты, синий кружок — велосипед. <b>M</b> или <b>Esc</b> — закрыть.</div>
+  </div>
+</div>
+
+<div id="shopView" class="overlay" hidden>
+  <div class="page" style="max-width:480px">
+    <h2 id="shopTitle">なつめ商店</h2>
+    <p class="sub" id="shopSub"></p>
+    <div id="shopList"></div>
+    <div class="row"><button id="shopClose" class="btn ghost">Уйти</button></div>
+  </div>
+</div>
+
+<div id="nightView" class="overlay" hidden>
+  <div class="page enikki">
+    <h2>夏休みの絵日記</h2>
+    <p class="sub" id="nightDate"></p>
+    <canvas id="nightPic" width="560" height="300"></canvas>
+    <p id="nightText"></p>
+    <div class="row" style="margin-top:12px"><button id="nightBtn" class="btn">Спокойной ночи</button></div>
+  </div>
+</div>
+
+<div id="diaryView" class="overlay" hidden>
+  <div class="page">
+    <h2>夏休みの日記 · Летний дневник</h2>
+    <p class="sub" id="diaryInfo"></p>
+    <div id="stamps"></div>
+    <h3>Коллекция насекомых · 虫かご</h3>
+    <div id="bugs"></div>
+    <h3>Улов · 釣果</h3>
+    <div id="fishes"></div>
+    <div class="row" style="margin-top:16px"><button id="diaryClose" class="btn ghost">Закрыть</button></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
