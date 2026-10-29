@@ -36,6 +36,7 @@ export function buildFields(W) {
   const rng = new RNG(555);
   const paddyKey = 'paddy';
   const sunflowers = [];
+  const melons = [];
   const plastic = new MeshBuilder();
   for (const c of plan.cells.values()) {
     const { iu, iv } = c;
@@ -65,6 +66,20 @@ export function buildFields(W) {
       if (mB < 1) levee(u0 - 0.2, (iv + 1) * CV, u1 + 0.2, (iv + 1) * CV);
       W.paddies.push({ x: cx, z: cz, y, hw: (u1 - u0) / 2, hd: (v1 - v0) / 2 });
       if (rng.chance(0.07)) scarecrow(W, rng, ...g2w(u0 + rng.float(4, u1 - u0 - 4), v0 + rng.float(3, v1 - v0 - 3)), y);
+    } else if (c.type === 'veg' && rng.chance(0.3)) {
+      // a watermelon patch: straw mulch, sprawling vines and striped melons lying among the leaves
+      const F = W.chunks.get('foliage', cx, cz), S = W.chunks.get('plain', cx, cz);
+      for (let k = 0; k < (u1 - u0) * (v1 - v0) * 0.5; k++) {
+        const [x, z] = g2w(rng.float(u0 + 0.4, u1 - 0.4), rng.float(v0 + 0.4, v1 - 0.4));
+        const gy = W.hm.sample(x, z);
+        if (rng.chance(0.4)) { S.place(x, gy, z, rng.float(0, 6.28)); for (let j = 0; j < 4; j++) S.box(rng.float(-0.2, 0.2), 0, rng.float(-0.2, 0.2), rng.float(0.25, 0.5), 0.015, 0.04, varyColor(0xb8a468, rng, 0.1)); continue; } // loose straw
+        F.place(x, gy, z, rng.float(0, 6.28));
+        F.blob(0, 0.07, 0, rng.float(0.22, 0.38), 0.11, rng.float(0.2, 0.34), varyColor(0x3e6e2a, rng, 0.1), rng, 0.2, 1, 0.7);
+      }
+      for (let k = 0; k < (u1 - u0) * (v1 - v0) * 0.04; k++) {
+        const [x, z] = g2w(rng.float(u0 + 0.8, u1 - 0.8), rng.float(v0 + 0.8, v1 - 0.8));
+        melons.push([x, W.hm.sample(x, z) + 0.13, z, rng.float(0.8, 1.15), rng.float(0, 6.28)]);
+      }
     } else if (c.type === 'veg') {
       const b = W.chunks.get('plain', cx, cz);
       const soil = C(0x6a5232), green = varyColor(rng.pick([0x4e7a2e, 0x5a8a34, 0x3e6a2a]), rng, 0.08);
@@ -121,6 +136,23 @@ export function buildFields(W) {
     W.scene.add(m);
   }
   if (sunflowers.length) buildSunflowers(W, sunflowers);
+  if (melons.length) buildMelons(W, melons);
+}
+
+// striped watermelons: one instanced mesh, stripes painted into a small texture
+function buildMelons(W, list) {
+  const [c, x] = (() => { const cv = document.createElement('canvas'); cv.width = 64; cv.height = 32; return [cv, cv.getContext('2d')]; })();
+  x.fillStyle = '#2e6a28'; x.fillRect(0, 0, 64, 32);
+  x.fillStyle = '#163a14';
+  for (let i = 0; i < 8; i++) { x.beginPath(); for (let y = 0; y <= 32; y += 2) x.lineTo(i * 8 + 2 + Math.sin(y * 0.6 + i) * 1.6, y); for (let y = 32; y >= 0; y -= 2) x.lineTo(i * 8 + 5 + Math.sin(y * 0.6 + i) * 1.6, y); x.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const geo = new THREE.SphereGeometry(0.17, 14, 10); geo.scale(1.2, 0.95, 1);
+  const mesh = new THREE.InstancedMesh(geo, patch(new THREE.MeshLambertMaterial({ map: t }), { key: 'melon' }), list.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  list.forEach(([mx, my, mz, sc, r], i) => mesh.setMatrixAt(i, m4.compose(p.set(mx, my, mz), q.setFromAxisAngle(up, r), s.set(sc, sc, sc))));
+  mesh.computeBoundingSphere();
+  mesh.castShadow = true; mesh.receiveShadow = true;
+  W.scene.add(mesh);
 }
 
 function scarecrow(W, rng, x, z, y) {
