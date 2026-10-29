@@ -154,11 +154,18 @@ class Game {
     const q = road.poly.nearest(sp.x, sp.z, 40);
     const yaw = Math.atan2(-(q.x - sp.x), -(q.z - sp.z)) + 1.2;
     this.player.spawn(sp.x + (q.x - sp.x) * 0.55, sp.z + (q.z - sp.z) * 0.55, yaw);
+    // pick up where the last visit ended
+    const sv = (this.saved = store.get('save', null));
+    if (sv && Number.isFinite(sv.x) && Number.isFinite(sv.z) && Math.abs(sv.x) < 990 && Math.abs(sv.z) < 990) {
+      this.player.spawn(sv.x, sv.z, sv.yaw || 0);
+      this.env.time.hour = sv.hour ?? 15.5; this.env.time.day = sv.day ?? 0; this.prevHour = null;
+      $('startBtn').dataset.cont = '1';
+    }
     this.applyTimeSpeed();
     this.newDay();
     this.renderer.compile(this.scene, this.camera);
-    progress(1, 'Готово. Лето ждёт.');
-    const b = $('startBtn'); b.disabled = false; b.textContent = 'Поехали'; b.focus();
+    progress(1, this.saved ? `Готово. Продолжаем: ${this.env.time.dateJP()}, ${this.env.time.clock()}.` : 'Готово. Лето ждёт.');
+    const b = $('startBtn'); b.disabled = false; b.textContent = this.saved ? 'Продолжить лето' : 'Поехали'; b.focus();
     this.state = 'title';
     window.__game = this;
   }
@@ -172,16 +179,22 @@ class Game {
     this.input.requestLock();
     this.state = 'play';
     this.hud.setMoney(this.money);
-    this.hud.place({ jp: 'なつめ村', ru: 'Деревня Нацумэ · 15:30, август', seal: '夏' });
+    this.hud.place({ jp: 'なつめ村', ru: `Деревня Нацумэ · ${this.env.time.clock()}, август`, seal: '夏' });
     this.hud.quest(QUEST[this.questI]?.text);
-    setTimeout(() => this.hud.toast('W — идти, E — сесть на велосипед. Он стоит справа от тебя.'), 1500);
-    setTimeout(() => this.hud.toast('Бабушкин дом отмечен на карте (M) знаком 家 — там можно переночевать.'), 7000);
+    if (!this.saved) {
+      setTimeout(() => this.hud.toast('W — идти, E — сесть на велосипед. Он стоит справа от тебя.'), 1500);
+      setTimeout(() => this.hud.toast('Бабушкин дом отмечен на карте (M) знаком 家 — там можно переночевать.'), 7000);
+    }
     this.canvas.focus();
   }
 
   bindUI() {
     $('startBtn').addEventListener('click', () => this.start());
     $('resumeBtn').addEventListener('click', () => this.resume());
+    $('resetBtn').addEventListener('click', () => this.resetSummer());
+    const flush = () => { if (!this.resetting) this.saveState(); };
+    addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
     $('shopClose').addEventListener('click', () => this.closeModal());
     $('diaryClose').addEventListener('click', () => this.closeModal());
     $('mapView').addEventListener('click', () => this.closeModal());
@@ -594,6 +607,19 @@ class Game {
     }
   }
 
+  saveState() {
+    if (this.state !== 'play' && this.state !== 'paused') return;
+    const P = this.player, t = this.env.time;
+    // when riding or sitting, save the spot on foot next to where we are
+    store.set('save', { x: +P.pos.x.toFixed(2), z: +P.pos.z.toFixed(2), yaw: +P.yaw.toFixed(3), hour: +t.hour.toFixed(3), day: t.day });
+  }
+  // a fresh summer: forget stamps, collections, money and the saved place, keep the settings
+  resetSummer() {
+    if (!confirm('Начать лето заново? Штампы, коллекции, деньги и место сохранения будут стёрты.')) return;
+    this.resetting = true;
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith('natsume:') && k !== 'natsume:settings') localStorage.removeItem(k); } catch (e) { /* storage blocked */ }
+    location.reload();
+  }
   // P: save the current view as a PNG (read synchronously right after rendering, while the drawing buffer is intact)
   takePhoto() {
     const t = this.env.time, name = `natsume-${8}-${String(7 + t.day).padStart(2, '0')}-${t.clock().replace(':', '')}.png`;
@@ -630,6 +656,8 @@ class Game {
       this.hud.hint(P.mode === 'bike' ? 'W педали · S тормоз · A/D руль · Shift — налечь · R звонок · E слезть' : P.mode === 'sit' ? (P.sit.dance ? 'Мышь — смотреть · E — выйти из круга' : P.sit.fish ? 'Жди, пока поплавок нырнёт, и жми E · W — смотать удочку' : 'Мышь — смотреть · T — быстрее время · E — встать') : 'WASD идти · Shift бег · E действие · M карта · Tab дневник');
       this.checkTimer = (this.checkTimer || 0) + dt;
       if (this.checkTimer > 0.5) { this.checkTimer = 0; this.checks(); }
+      this.saveTimer = (this.saveTimer || 0) + dt;
+      if (this.saveTimer > 10) { this.saveTimer = 0; this.saveState(); }
       this.timeEvents();
     } else if (this.state === 'title') {
       // slow establishing shot behind the title page

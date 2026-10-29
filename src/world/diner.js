@@ -123,7 +123,8 @@ export class DinerInterior {
   }
   update(dt, tSec, time, cam) {
     const h = time.hour, L = this.L;
-    this.open = h >= OPEN && h < CLOSE;
+    // nobody gets locked in at closing time
+    this.open = (h >= OPEN && h < CLOSE) || (this.open && this.inside(cam));
     this.light += ((this.open ? 1 : 0) - this.light) * Math.min(1, dt * 3);
     this.doorCol.flags = this.open ? 0 : CF.ALL;
     // the door slides across the doorway when closed

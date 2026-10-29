@@ -292,7 +292,8 @@ export class StoreInterior {
   }
   update(dt, tSec, time, cam) {
     const h = time.hour;
-    this.open = h >= OPEN && h < CLOSE;
+    // the shopkeeper won't lock up with a customer still inside
+    this.open = (h >= OPEN && h < CLOSE) || (this.open && this.inside(cam));
     this.light += ((this.open ? 1 : 0) - this.light) * Math.min(1, dt * 3);
     this.doorCol.flags = this.open ? 0 : CF.ALL;
     const L = this.L;
