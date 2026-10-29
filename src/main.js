@@ -446,6 +446,7 @@ class Game {
     if (this.weather.rain > 0.6) this.stamp('rain');
     if (h > 4.4 && h < 6.6 && U.uMist.value.x > 0.015) this.stamp('mist');
     if (W.festival.open && W.festival.near(P.pos)) this.stamp('matsuri');
+    if (W.toro.glow > 0.5 && W.toro.nearest(P.pos) < 25) this.stamp('toro');
     store.set('ridden', Math.round(P.ridden));
   }
   timeEvents() {
@@ -464,6 +465,7 @@ class Game {
       for (let k = 0; k < 3; k++) this.audio.templeBell(600, 60, 520, k * 9);
       this.hud.toast('Где-то за холмами звонит храмовый колокол.');
     }
+    if (crossed(20.5)) this.hud.toast('У моста Нацумэ на воду опускают бумажные фонарики — тōро-нагаси. Они поплывут вниз по реке, к морю.');
     if (crossed(18.95)) this.hud.toast('На школьном дворе загорелись фонарики вокруг башни-ягуры: начинаются танцы бон-одори.');
     if (crossed(18.3)) this.hud.toast('На холме у святилища зажглись бумажные фонарики — начинается летний праздник, нацу-мацури.');
     if (crossed(22.2) && this.weather.cloud < 0.3) this.hud.toast('Этой ночью пик Персеид. Если долго смотреть в небо, можно поймать падающую звезду.');
@@ -507,7 +509,7 @@ class Game {
       const fest = this.world.festival;
       const ts = this.world.taiso;
       const bon = this.world.bon;
-      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : ts.state === 'playing' && ts.near(P.pos) ? 0.15 : (fest.open && fest.near(P.pos)) || (bon.open && bon.near(P.pos)) ? 0.4 : P.mode === 'sit' && !P.sit.dance ? 6 : 1;
+      time.boost = this.input.down('KeyT') ? 40 : this.fireworks.show ? 0.15 : ts.state === 'playing' && ts.near(P.pos) ? 0.15 : (fest.open && fest.near(P.pos)) || (bon.open && bon.near(P.pos)) || (this.world.toro.active && this.world.toro.nearest(P.pos) < 45) ? 0.4 : P.mode === 'sit' && !P.sit.dance ? 6 : 1;
       P.update(dt, this.tSec, time);
       this.hud.prompt(P.prompt);
       this.hud.speed(P.bike.speed, P.mode === 'bike');
@@ -538,6 +540,7 @@ class Game {
       this.world.festival.update(this.modal ? 0 : dt, this.tSec, time, this.player);
       this.world.taiso.update(this.modal ? 0 : dt, this.tSec, time, this.player);
       this.world.bon.update(this.modal ? 0 : dt, this.tSec, time, this.player, this.audio);
+      this.world.toro.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

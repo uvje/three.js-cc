@@ -17,6 +17,7 @@ import { Festival } from './festival.js';
 import { Home } from './home.js';
 import { RadioTaiso } from './taiso.js';
 import { BonOdori } from './bonodori.js';
+import { Toro } from './toro.js';
 
 // Builds the whole village and answers spatial queries (ground height, surfaces) for the player and the soundscape.
 
@@ -70,6 +71,7 @@ export class World {
     this.home = new Home(this);
     this.taiso = new RadioTaiso(this);
     this.bon = new BonOdori(this);
+    this.toro = new Toro(this);
     for (const l of this.tallGrassLots) this.plan.markRect(l.x, l.z, l.w / 2 - 1, l.d / 2 - 1, l.ang, 0, G.TALL);
     await step(0.64, 'Сажаем траву и рис');
     Object.assign(this, buildGroundTextures(this.hm, this.plan.ground, this.plan.noise));
