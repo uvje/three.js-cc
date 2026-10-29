@@ -20,6 +20,7 @@ import { Traffic } from './world/traffic.js';
 import { Weather } from './env/weather.js';
 import { Wildlife } from './world/wildlife.js';
 import { TouchControls } from './ui/touch.js';
+import { Insects } from './world/insects.js';
 
 const SPEEDS = [10, 20, 40, 60, 120, 240, 600];
 const $ = (id) => document.getElementById(id);
@@ -129,6 +130,7 @@ class Game {
     this.env.weather = this.weather;
     this.env.sky.onMeteor = () => { if (this.state === 'play' && !this.modal) this.stamp('meteor'); };
     this.wildlife = new Wildlife(this.world, this.audio);
+    this.insects = new Insects(this.world, this.audio);
     this.player = new Player(this.world, this.camera, this.input, this.audio, this.hud, this.settings);
     const sp = this.world.shopSpots.store;
     const road = this.world.plan.byName.main;
@@ -221,7 +223,7 @@ class Game {
     this.modal = kind;
     this.input.exitLock(); this.input.clear();
     if (kind === 'map') { this.hud.drawMap(this.player); $('mapView').hidden = false; }
-    if (kind === 'diary') { this.hud.renderDiary(this.stamps, { ridden: this.player.ridden, day: this.env.time.day }); $('diaryView').hidden = false; }
+    if (kind === 'diary') { this.hud.renderDiary(this.stamps, { ridden: this.player.ridden, day: this.env.time.day, bugs: new Set(store.get('bugs', [])) }); $('diaryView').hidden = false; }
     if (kind === 'shop') this.openShop(data);
   }
   closeModal() {
@@ -244,6 +246,18 @@ class Game {
     } else if (it.kind === 'shop') this.openModal('shop', it.shop);
     else if (it.kind === 'stall') this.openModal('shop', it.stall);
     else if (it.kind === 'granny') { this.hud.toast('Бабушка: «' + this.home.grannyLine(this.env.time.hour) + '»'); this.stamp('granny'); }
+    else if (it.kind === 'bug') {
+      const r = this.insects.catch(it);
+      if (!r) return;
+      if (r.escaped) { this.hud.toast(`${r.bug.ru} с треском вырвалась из рук и улетела, напоследок обрызгав тебя. Лето!`); return; }
+      const got = new Set(store.get('bugs', []));
+      const fresh = !got.has(r.bug.id);
+      got.add(r.bug.id); store.set('bugs', [...got]);
+      this.audio.click();
+      this.hud.toast(`${r.bug.jp} — ${r.bug.ru}${fresh ? ' · новая в коллекции!' : ''} ${r.bug.note}`);
+      if (r.bug.id === 'kabuto') this.stamp('kabuto');
+      if (got.size >= 5) this.stamp('mushi');
+    }
     else if (it.kind === 'closed') this.hud.toast('Двери заперты, внутри темно. Магазин откроется в 6:30.');
     else if (it.kind === 'melon') {
       this.audio.eat();
@@ -541,6 +555,7 @@ class Game {
       this.world.taiso.update(this.modal ? 0 : dt, this.tSec, time, this.player);
       this.world.bon.update(this.modal ? 0 : dt, this.tSec, time, this.player, this.audio);
       this.world.toro.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
+      this.insects.update(this.modal ? 0 : dt, time, this.camera.position);
     }
     this.hud.clock(time, this.speedLabel(this.settings.timeIdx) + (time.boost > 1 ? ' · ×' + time.boost : ''));
     if (this.state === 'play') this.updateAudio(dt);

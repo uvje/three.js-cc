@@ -124,6 +124,12 @@ body.touch #hint { display: none; }
 .stamp.got .c { border: 3px solid var(--shu); color: var(--shu); transform: rotate(-8deg); background: rgba(207, 58, 44, .07); }
 .stamp .lbl { color: var(--ink-soft); }
 .stamp.got .lbl { color: var(--ink); font-weight: 700; }
+#bugs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.bug { border: 2px dashed var(--ink-soft); border-radius: 8px; padding: 6px 10px; background: rgba(255, 255, 255, .45); }
+.bug .jp { font-family: var(--font-jp); font-weight: 900; font-size: 15px; color: var(--ink-soft); }
+.bug .ru { font-size: 12px; color: var(--ink-soft); }
+.bug.got { border: 2px solid var(--ink); background: rgba(255, 255, 255, .8); }
+.bug.got .jp, .bug.got .ru { color: var(--ink); }
 @media (max-width: 640px) { #title .wrap { flex-direction: column; align-items: center; } #title .name { writing-mode: horizontal-tb; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation-duration: .01s; } #place { transition: none; } }
 </style>
@@ -216,6 +222,8 @@ body.touch #hint { display: none; }
     <h2>夏休みの日記 · Летний дневник</h2>
     <p class="sub" id="diaryInfo"></p>
     <div id="stamps"></div>
+    <h3>Коллекция насекомых · 虫かご</h3>
+    <div id="bugs"></div>
     <div class="row" style="margin-top:16px"><button id="diaryClose" class="btn ghost">Закрыть</button></div>
   </div>
 </div>

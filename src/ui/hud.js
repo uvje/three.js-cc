@@ -1,5 +1,6 @@
 import { hillDist } from '../world/terrain.js';
 import { F, THETA, CU, CV } from '../world/planner.js';
+import { BUGS } from '../world/insects.js';
 
 // DOM HUD: clock, prompts, toasts, place titles, map, diary stamps, shop menus and the pause page.
 
@@ -36,6 +37,8 @@ export const STAMPS = [
   { id: 'taiso', seal: '体', ru: 'Сделать утреннюю радиозарядку с детьми у школы' },
   { id: 'bon', seal: '踊', ru: 'Станцевать бон-одори вокруг ягуры' },
   { id: 'toro', seal: '灯', ru: 'Проводить плывущие по реке фонарики' },
+  { id: 'kabuto', seal: '甲', ru: 'Поймать жука-носорога' },
+  { id: 'mushi', seal: '虫', ru: 'Собрать пять видов насекомых' },
 ];
 
 export class HUD {
@@ -102,6 +105,19 @@ export class HUD {
       d.append(c, l); s.appendChild(d);
     }
     this.el.diaryInfo.textContent = `Штампов: ${got.size} из ${STAMPS.length} · проехано ${(stats.ridden / 1000).toFixed(1)} км · день ${stats.day + 1}`;
+    // the bug collection
+    const b = document.getElementById('bugs');
+    if (b) {
+      b.innerHTML = '';
+      for (const bug of BUGS) {
+        const have = stats.bugs?.has(bug.id);
+        const d = document.createElement('div');
+        d.className = 'bug' + (have ? ' got' : '');
+        const j = document.createElement('div'); j.className = 'jp'; j.textContent = have ? bug.jp : '？？？';
+        const r = document.createElement('div'); r.className = 'ru'; r.textContent = have ? bug.ru : 'ещё не поймано';
+        d.append(j, r); b.appendChild(d);
+      }
+    }
   }
 
   // ---------------- shop

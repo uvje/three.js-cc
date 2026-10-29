@@ -415,6 +415,20 @@ export class AudioEngine {
     g.linearRampToValueAtTime(A * 0.5, ts + 0.3); g.linearRampToValueAtTime(0, ts + 1.6);
     o.start(t0); lfo.start(t0); o.stop(ts + 1.7); lfo.stop(ts + 1.7);
   }
+  // a caught cicada tearing free: a few angry buzzes
+  cicadaEscape(x, y, z) {
+    if (!this.ready) return;
+    const c = this.ctx, t = c.currentTime + 0.02;
+    const out = this.spot(x, y, z, { ref: 4 });
+    const src = c.createBufferSource(); src.buffer = this.white; src.loop = true;
+    const bp = this.filt('bandpass', 4400, 1.4), am = this.gain(0.4), lfo = this.osc('sawtooth', 85), lg = this.gain(0.6), env = this.gain(0);
+    lfo.connect(lg).connect(am.gain); src.connect(bp).connect(am).connect(env).connect(out);
+    const g = env.gain;
+    g.setValueAtTime(0, t);
+    for (let k = 0; k < 3; k++) { const t0 = t + k * 0.17; g.linearRampToValueAtTime(0.9, t0 + 0.015); g.linearRampToValueAtTime(0.5, t0 + 0.1); g.linearRampToValueAtTime(0.05, t0 + 0.15); }
+    g.linearRampToValueAtTime(0, t + 0.6);
+    src.start(t, Math.random() * 2); lfo.start(t); src.stop(t + 0.7); lfo.stop(t + 0.7);
+  }
   higurashi(x, y, z) {
     const c = this.ctx, t0 = c.currentTime + 0.05;
     const out = this.spot(x, y, z, { ref: 10, roll: 0.7, rev: 0.75 });
