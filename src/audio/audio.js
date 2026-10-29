@@ -446,6 +446,15 @@ export class AudioEngine {
     g.gain.linearRampToValueAtTime(0, t + 0.6);
     o.start(t0); j.start(t0); o.stop(t + 0.7); j.stop(t + 0.7);
   }
+  // a kid slapping water at a friend: a wet slap and a spray falling back
+  kidSplash(p) {
+    if (!this.ready) return;
+    const t = this.ctx.currentTime + 0.02;
+    const out = this.spot(p.x, p.y + 0.5, p.z, { ref: 7, rev: 0.15 });
+    this.burst(t, 1100, 0.9, 0.09, 0.5, out, 'lowpass');
+    this.thump(t, 300, 110, 0.08, 0.25, out);
+    for (let i = 0; i < 6; i++) this.burst(t + 0.25 + Math.random() * 0.35, 2600 + Math.random() * 2400, 2, 0.05, 0.08 + Math.random() * 0.06, out);
+  }
   // camera shutter: two quick mechanical clicks
   shutter() { if (!this.ready) return; const t = this.ctx.currentTime; this.burst(t, 3200, 1.5, 0.03, 0.3); this.burst(t + 0.07, 2400, 1.5, 0.04, 0.25); this.thump(t + 0.07, 300, 120, 0.04, 0.15); }
   // a caught cicada tearing free: a few angry buzzes

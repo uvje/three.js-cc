@@ -129,6 +129,7 @@ class Game {
     await this.world.generate(progress);
     this.home = this.world.home;
     this.world.taiso.audio = this.audio;
+    this.world.riverKids.audio = this.audio;
     this.home.showGoldfish(!!store.get('kingyo', false));
     this.hud.buildMap(this.world);
     this.trains = new Trains(this.world, this.audio);
@@ -427,7 +428,7 @@ class Game {
       river: 'сидел у реки', school: 'заглянул в пустую школу', diner: 'обедал в столовой «Фудзи»', station: 'встречал поезд на станции',
       busstop: 'ждал автобус на остановке', melon: 'ел арбуз у бабушки', engawa: 'сидел вечером на энгаве', rain: 'попал под ливень',
       cat: 'гладил кошку', hanabi: 'смотрел фейерверк над рекой', senko: 'зажигал бенгальские огни', matsuri: 'ходил на праздник у святилища',
-      kingyo: 'поймал золотую рыбку', meteor: 'видел падающую звезду', taiso: 'делал радиозарядку с ребятами', bon: 'танцевал бон-одори',
+      kingyo: 'поймал золотую рыбку', kawaasobi: 'смотрел, как ребята брызгаются в реке', fish: 'рыбачил с берега', meteor: 'видел падающую звезду', taiso: 'делал радиозарядку с ребятами', bon: 'танцевал бон-одори',
       toro: 'провожал фонарики на реке', granny: 'болтал с бабушкой',
     };
     const did = [...this.today.events].filter((id) => PH[id]).map((id) => PH[id]);
@@ -537,6 +538,7 @@ class Game {
       this.hud.quest(QUEST[this.questI]?.text);
     }
     if (W.toro.glow > 0.5 && W.toro.nearest(P.pos) < 25) this.stamp('toro');
+    if (W.riverKids.group.visible && W.riverKids.near(P.pos, 30)) this.stamp('kawaasobi');
     store.set('ridden', Math.round(P.ridden));
   }
   timeEvents() {
@@ -648,6 +650,7 @@ class Game {
       this.world.toro.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
       this.insects.update(this.modal ? 0 : dt, time, this.camera.position);
       this.birds.update(this.modal ? 0 : dt, time, this.camera.position, this.player);
+      this.world.riverKids.update(this.modal ? 0 : dt, this.tSec, time, this.camera.position);
       const fished = this.world.fishing.update(this.modal ? 0 : dt, this.tSec, time, this.camera, this.input, this.audio);
       if (fished) this.landFish(fished);
       if (this.world.fishing.msg) { this.hud.toast(this.world.fishing.msg); this.world.fishing.msg = null; }

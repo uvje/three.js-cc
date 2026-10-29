@@ -20,6 +20,7 @@ import { BonOdori } from './bonodori.js';
 import { Toro } from './toro.js';
 import { updateCrowdShadows } from './npc.js';
 import { Fishing } from './fishing.js';
+import { RiverKids } from './riverkids.js';
 
 // Builds the whole village and answers spatial queries (ground height, surfaces) for the player and the soundscape.
 
@@ -75,6 +76,7 @@ export class World {
     this.bon = new BonOdori(this);
     this.toro = new Toro(this);
     this.fishing = new Fishing(this);
+    this.riverKids = new RiverKids(this);
     for (const l of this.tallGrassLots) this.plan.markRect(l.x, l.z, l.w / 2 - 1, l.d / 2 - 1, l.ang, 0, G.TALL);
     await step(0.64, 'Сажаем траву и рис');
     Object.assign(this, buildGroundTextures(this.hm, this.plan.ground, this.plan.noise));

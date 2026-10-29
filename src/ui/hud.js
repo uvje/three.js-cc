@@ -41,6 +41,7 @@ export const STAMPS = [
   { id: 'kabuto', seal: '甲', ru: 'Поймать жука-носорога' },
   { id: 'mushi', seal: '虫', ru: 'Собрать пять видов насекомых' },
   { id: 'fish', seal: '釣', ru: 'Поймать рыбу в реке' },
+  { id: 'kawaasobi', seal: '泳', ru: 'Найти ребят, купающихся в реке' },
 ];
 
 // A child's crayon drawing of the most memorable thing of the day.
