@@ -9,7 +9,7 @@ import { person, pose } from './npc.js';
 // The summer festival (natsu matsuri) at the shrine: strings of paper lanterns up the stairs and along the approach,
 // food stalls on the terrace, visitors in yukata, and taiko with a bamboo flute drifting over the village at night.
 
-const START = 18.3, END = 23.6, MUSIC_END = 22.6;
+const START = 18.3, END = 23.6, MUSIC_END = 22.6, BON_START = 18.95, BON_END = 21.05;
 
 export function lanternTex(red) {
   const [c, x] = canvas(128, 128);
@@ -301,7 +301,8 @@ export class Festival {
     const target = h >= START && h < END ? 1 : 0;
     this.on += (target - this.on) * Math.min(1, dt * 0.8);
     if (this.on < 0.002) this.on = 0;
-    const musicT = h >= START + 0.15 && h < MUSIC_END ? 1 : 0;
+    // the drummers play a first set before the bon dance starts at the school, and a second one after it ends
+    const musicT = (h >= START + 0.15 && h < BON_START) || (h >= BON_END && h < MUSIC_END) ? 1 : 0;
     this.music += (musicT * this.on - this.music) * Math.min(1, dt * 0.5);
     const night = time.night;
     const glow = this.on * (0.35 + 0.9 * night);

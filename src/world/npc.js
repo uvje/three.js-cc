@@ -113,6 +113,33 @@ function cat(color, rng) {
   void rng;
   return root;
 }
+// a shiba inu: fox-coloured with a cream chest and a tail curled over its back
+function shiba() {
+  const root = new THREE.Group();
+  const tan = 0xc8803a, cream = 0xf0e4cc;
+  const body = ball(0.15, tan, 1.0, 0.95, 1.9); body.position.y = 0.33; root.add(body);
+  const chest = ball(0.11, cream, 1.0, 0.9, 1.0); chest.position.set(0, 0.3, 0.17); root.add(chest);
+  const head = new THREE.Group(); head.position.set(0, 0.47, 0.3); root.add(head);
+  head.add(ball(0.11, tan, 1.0, 0.95, 1.0));
+  const muzzle = ball(0.06, cream, 1.0, 0.85, 1.2); muzzle.position.set(0, -0.03, 0.1); head.add(muzzle);
+  const nose = ball(0.018, 0x1a1a1a); nose.position.set(0, -0.01, 0.17); head.add(nose);
+  for (const s of [-1, 1]) {
+    const e = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.09, 4), M(tan)); e.position.set(s * 0.06, 0.11, -0.01); e.rotation.z = -s * 0.2; head.add(e);
+    const ey = ball(0.014, 0x1a1a1a); ey.position.set(s * 0.045, 0.02, 0.09); head.add(ey);
+  }
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 6, 14), M(0xc8282a)); collar.position.set(0, 0.42, 0.24); collar.rotation.x = 1.2; root.add(collar);
+  const tail = new THREE.Group(); tail.position.set(0, 0.45, -0.26); root.add(tail);
+  const tc = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.03, 6, 10, Math.PI * 1.4), M(tan)); tc.rotation.y = Math.PI / 2; tc.position.y = 0.05; tail.add(tc);
+  const legs = [];
+  for (const [x, z] of [[0.07, 0.17], [-0.07, 0.17], [0.07, -0.17], [-0.07, -0.17]]) {
+    const l = new THREE.Group(); l.position.set(x, 0.27, z); root.add(l);
+    const m = cyl(0.03, 0.028, 0.27, z > 0 ? cream : tan, 6); m.position.y = -0.27; l.add(m);
+    legs.push(l);
+  }
+  root.userData = { head, tail, legs };
+  root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return root;
+}
 const CAT_COLORS = [
   { body: 0xd8893c, tail: 0xc87830 },
   { body: 0x232323 },
@@ -194,6 +221,19 @@ export class Villagers {
       const n = add(g2, q.x, q.z, 0, 'stroll', { road, s: q.s, dir: 1, s0: q.s - 140, s1: q.s + 90, side: -1 });
       void n;
     }
+    // a man walking his shiba along the river embankment, early in the morning and at sunset
+    const em = W.plan.byName.embank;
+    if (em && em.poly.length > 120) {
+      const m = person({ skin: 0xd8b090, shirt: 0xe8e4d8, pants: 0x4a4a52, legs: 0x4a4a52, hair: 0x8a8a88, cap: 0x3a4a6a, sleeve: false, scale: 0.98, shoes: 0x6a5a4a });
+      const dog = shiba();
+      W.scene.add(dog);
+      const leash = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xc8282a }));
+      leash.frustumCulled = false;
+      W.scene.add(leash);
+      const s = em.poly.length * 0.4;
+      const q = em.poly.at(s);
+      add(m, q.x, q.z, 0, 'stroll', { road: em, s, dir: 1, s0: 20, s1: em.poly.length - 20, side: -1, off: 0.35, speed: 0.95, upright: true, hours: (h) => (h > 5.6 && h < 7.6) || (h > 17.4 && h < 19.4), dog, leash });
+    }
     // cats
     const spots = [];
     if (st) spots.push([st.x + 1.8, st.z + 0.6, 'sit']);
@@ -245,7 +285,8 @@ export class Villagers {
       n.t += dt;
       const p = n.p;
       const near = Math.abs(n.x - cam.x) < 120 && Math.abs(n.z - cam.z) < 120;
-      p.visible = near && (n.kind === 'fan' ? h > 7.5 && h < 19.3 : n.kind === 'farmer' ? day : n.kind === 'boy' ? h > 7 && h < 17 : n.kind === 'stroll' ? h > 8 && h < 17.5 : n.kind === 'doze' ? h > 6.8 && h < 19.5 : true);
+      p.visible = near && (n.hours ? n.hours(h) : n.kind === 'fan' ? h > 7.5 && h < 19.3 : n.kind === 'farmer' ? day : n.kind === 'boy' ? h > 7 && h < 17 : n.kind === 'stroll' ? h > 8 && h < 17.5 : n.kind === 'doze' ? h > 6.8 && h < 19.5 : true);
+      if (n.dog) { n.dog.visible = n.leash.visible = p.visible; }
       if (!p.visible) continue;
       const u = p.userData;
       if (n.kind === 'fan') {
@@ -269,15 +310,39 @@ export class Villagers {
       } else if (n.kind === 'stroll') {
         const dist = Math.hypot(player.pos.x - n.x, player.pos.z - n.z);
         const blocked = dist < 1.6;
-        if (!blocked) n.s += n.dir * 0.75 * dt;
+        if (!blocked) n.s += n.dir * (n.speed || 0.75) * dt;
         if (n.s > n.s1 || n.s < n.s0) n.dir *= -1;
         const q = n.road.poly.at(n.s);
-        const off = n.road.w / 2 + 0.6;
+        const off = n.off ?? n.road.w / 2 + 0.6;
         n.x = q.x + -q.tz * n.side * off; n.z = q.z + q.tx * n.side * off;
         p.position.set(n.x, this.W.groundAt(n.x, n.z, n.y + 1).h, n.z);
         p.rotation.y = Math.atan2(q.tx * n.dir, q.tz * n.dir);
         pose(p, blocked ? 'stand' : 'walk', n.t * 4.2);
-        u.spine.rotation.x = 0.3; u.shL.rotation.x = -0.9; u.shR.rotation.x = -0.9;
+        if (!n.upright) { u.spine.rotation.x = 0.3; u.shL.rotation.x = -0.9; u.shR.rotation.x = -0.9; }
+        else u.shR.rotation.set(-0.7, 0, -0.1);
+        if (n.dog) {
+          // the dog trots ahead on its lead, nose down, now and then stopping to sniff the grass
+          const sniff = Math.sin(n.t * 0.23) > 0.8 && !blocked;
+          const ahead = sniff ? 0.9 : 1.6;
+          const dq = n.road.poly.at(n.s + n.dir * ahead);
+          const dx = dq.x + -dq.tz * n.side * (off + 0.25), dz = dq.z + dq.tx * n.side * (off + 0.25);
+          const d = n.dog, du = d.userData;
+          d.position.set(dx, this.W.groundAt(dx, dz, n.y + 1).h, dz);
+          d.rotation.y = p.rotation.y + (sniff ? Math.sin(n.t * 2) * 0.6 : 0);
+          const gait = blocked || sniff ? 0 : 1;
+          du.legs.forEach((l, i) => { l.rotation.x = Math.sin(n.t * 9 + (i % 2 ? 0 : Math.PI) + (i > 1 ? Math.PI / 2 : 0)) * 0.6 * gait; });
+          du.head.rotation.x = sniff ? 0.7 : 0.1;
+          du.tail.rotation.z = Math.sin(n.t * 6) * 0.2;
+          // lead from his hand to the collar
+          const hand = (this._v1 || (this._v1 = new THREE.Vector3())).set(0, -0.3, 0);
+          u.elR.updateWorldMatrix(true, false); u.elR.localToWorld(hand);
+          du.head.updateWorldMatrix(true, false);
+          const col = du.head.localToWorld((this._v2 || (this._v2 = new THREE.Vector3())).set(0, -0.06, -0.06));
+          const a = n.leash.geometry.attributes.position.array;
+          a[0] = hand.x; a[1] = hand.y; a[2] = hand.z; a[3] = col.x; a[4] = col.y; a[5] = col.z;
+          n.leash.geometry.attributes.position.needsUpdate = true;
+          if (Math.random() < dt * 0.012 && Math.hypot(cam.x - n.x, cam.z - n.z) < 40) this.audio.dog?.(dx, d.position.y + 0.4, dz);
+        }
       }
     }
     // cats: nap, sit, and dart away from fast bikes

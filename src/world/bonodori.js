@@ -9,7 +9,7 @@ import { LanternStrings, yukataPerson } from './festival.js';
 // a drummer on top, strings of lanterns running out to the edge of the ground, and a ring of dancers in yukata
 // circling slowly with the same few gestures. You can step into the ring and dance along.
 
-const START = 18.9, END = 21.8, R = 7, N = 18, OMEGA = 0.045;
+const START = 18.9, END = 21.05, R = 7, N = 18, OMEGA = 0.045;
 
 function kohakuTex() {
   const [c, x] = canvas(256, 64);
